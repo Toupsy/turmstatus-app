@@ -20,6 +20,7 @@ export default function Layout() {
           {user.role === "HAUPTWACHE" && <NavLink to="/dashboard">Dashboard</NavLink>}
           {user.role === "WACHGAENGER" && <NavLink to="/meine-wache">Meine Wache</NavLink>}
           {user.role === "TURMFUEHRER" && <NavLink to="/mein-turm">Mein Turm</NavLink>}
+          {user.role === "HAUPTWACHE" && <NavLink to="/turme-boote">Türme &amp; Boote</NavLink>}
           {user.role === "HAUPTWACHE" && <NavLink to="/benutzer">Benutzer</NavLink>}
           {user.role === "HAUPTWACHE" && <NavLink to="/audit">Audit</NavLink>}
         </nav>
