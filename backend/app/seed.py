@@ -32,7 +32,32 @@ BOATS = [
 ]
 
 
+def ensure_admin(db: Session) -> None:
+    """Stellt sicher, dass das Hauptwache-Konto existiert – unabhängig vom
+    übrigen Demo-Seed. So ist nach jedem Start mindestens ein Login möglich."""
+    admin = db.query(User).filter(User.username == settings.admin_username).first()
+    if admin:
+        # Optionaler Notfall-Reset des Passworts (ADMIN_RESET_PASSWORD=true).
+        if settings.admin_reset_password:
+            admin.hashed_password = hash_password(settings.admin_password)
+            admin.is_active = True
+            db.commit()
+        return
+    db.add(
+        User(
+            username=settings.admin_username,
+            full_name="Hauptwache Leitung",
+            hashed_password=hash_password(settings.admin_password),
+            role=Role.HAUPTWACHE,
+        )
+    )
+    db.commit()
+
+
 def seed_initial_data(db: Session) -> None:
+    # Admin immer sicherstellen (auch bei bereits befüllter Datenbank).
+    ensure_admin(db)
+
     if db.query(Tower).count() > 0:
         return
 
@@ -50,18 +75,7 @@ def seed_initial_data(db: Session) -> None:
         towers.append(tower)
     db.flush()
 
-    # 2) Hauptwache-Admin
-    if not db.query(User).filter(User.username == settings.admin_username).first():
-        db.add(
-            User(
-                username=settings.admin_username,
-                full_name="Hauptwache Leitung",
-                hashed_password=hash_password(settings.admin_password),
-                role=Role.HAUPTWACHE,
-            )
-        )
-
-    # 3) Pro Turm ein Turmführer + zwei Wachgänger (mit verknüpften Guard-Objekten)
+    # 2) Pro Turm ein Turmführer + zwei Wachgänger (mit verknüpften Guard-Objekten)
     for i, tower in enumerate(towers, start=1):
         leader = User(
             username=f"turmfuehrer{i}",

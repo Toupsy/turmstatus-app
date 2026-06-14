@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Seed / erster Admin
     admin_username: str = "hauptwache"
     admin_password: str = "wache2024"
+    # Wenn true: setzt beim Start das Passwort des Hauptwache-Kontos auf
+    # ADMIN_PASSWORD zurück (Notfall-Reset bei vergessenem/altem Passwort).
+    admin_reset_password: bool = False
 
     # CORS – Frontend-Origin(s), kommagetrennt
     cors_origins: str = "*"
