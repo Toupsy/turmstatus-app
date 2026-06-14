@@ -9,7 +9,6 @@ import Dashboard from "./pages/Dashboard";
 import GuardPanel from "./pages/GuardPanel";
 import TowerPanel from "./pages/TowerPanel";
 import AdminUsers from "./pages/AdminUsers";
-import AdminTowers from "./pages/AdminTowers";
 import AuditView from "./pages/AuditView";
 
 function Protected({ children, roles }) {
@@ -75,14 +74,6 @@ export default function App() {
           element={
             <Protected roles={["TURMFUEHRER"]}>
               <TowerPanel />
-            </Protected>
-          }
-        />
-        <Route
-          path="turme-boote"
-          element={
-            <Protected roles={["HAUPTWACHE"]}>
-              <AdminTowers />
             </Protected>
           }
         />
