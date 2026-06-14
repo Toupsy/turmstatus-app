@@ -25,10 +25,11 @@ services:
     networks:
       - turmstatus
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus} -d ${POSTGRES_DB:-turmstatus}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 60s
 
   backend:
     build: ./backend
