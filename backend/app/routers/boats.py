@@ -50,3 +50,18 @@ def update_boat(
     db.refresh(boat)
     notify("boats_changed", {"id": boat.id})
     return boat
+
+
+@router.delete("/{boat_id}", status_code=204)
+def delete_boat(
+    boat_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(Role.HAUPTWACHE)),
+):
+    boat = db.get(Boat, boat_id)
+    if not boat:
+        raise HTTPException(404, "Boot nicht gefunden")
+    log_action(db, user, "BOAT_DELETED", "boat", boat.id, {"name": boat.name})
+    db.delete(boat)
+    db.commit()
+    notify("boats_changed", {"id": boat_id})
