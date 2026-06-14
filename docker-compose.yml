@@ -1,15 +1,25 @@
+# Eigenständige Docker-Compose-Datei – alle Werte direkt eingetragen, keine .env nötig.
+#
+# WICHTIG für den Produktivbetrieb: Vor dem ersten Start unbedingt anpassen!
+#   - SECRET_KEY        -> langer Zufallswert, z. B.: openssl rand -hex 32
+#   - POSTGRES_PASSWORD -> sicheres Passwort (an BEIDEN Stellen identisch: db + DATABASE_URL)
+#   - ADMIN_PASSWORD    -> Passwort des ersten Hauptwache-Kontos
+#
+# Start:   docker compose up -d --build
+# Aufruf:  http://<NAS-IP>:3456
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-turmstatus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turmstatus}
-      POSTGRES_DB: ${POSTGRES_DB:-turmstatus}
+      POSTGRES_USER: turmstatus
+      POSTGRES_PASSWORD: turmstatus            # <-- ändern (muss zu DATABASE_URL unten passen)
+      POSTGRES_DB: turmstatus
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus}"]
+      test: ["CMD-SHELL", "pg_isready -U turmstatus"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -21,11 +31,11 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-turmstatus}:${POSTGRES_PASSWORD:-turmstatus}@db:5432/${POSTGRES_DB:-turmstatus}
-      SECRET_KEY: ${SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DATABASE_URL: postgresql+psycopg2://turmstatus:turmstatus@db:5432/turmstatus  # <-- Passwort an db angleichen
+      SECRET_KEY: CHANGE_ME_use_a_long_random_value   # <-- ändern: openssl rand -hex 32
+      ADMIN_USERNAME: hauptwache
+      ADMIN_PASSWORD: wache2024                 # <-- ändern
+      CORS_ORIGINS: "*"
     expose:
       - "8000"
 
@@ -35,7 +45,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${HTTP_PORT:-3456}:80"
+      - "3456:80"                              # Host-Port 3456 -> bei Bedarf hier ändern (z. B. "3460:80")
 
 volumes:
   db_data:
