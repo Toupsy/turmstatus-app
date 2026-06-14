@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-turmstatus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turmstatus}
+      POSTGRES_DB: ${POSTGRES_DB:-turmstatus}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-turmstatus}:${POSTGRES_PASSWORD:-turmstatus}@db:5432/${POSTGRES_DB:-turmstatus}
+      SECRET_KEY: ${SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+
+volumes:
+  db_data:
