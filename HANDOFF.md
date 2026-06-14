@@ -30,7 +30,19 @@ Statusdokument zum Projekt **Turmstatus** (digitales Wach- und Statussystem Wass
 
 ### ✅ M4 – Deployment & Doku
 - `docker-compose.yml` (db/backend/frontend, Healthchecks, persistentes Volume).
-- `.env.example`, `README.md`, `INSTALL_SYNOLOGY.md`.
+- `README.md`, `INSTALL_SYNOLOGY.md`.
+
+### ✅ M5 – NAS-/Portainer-Deployment (UGREEN, am Wachplan-Generator orientiert)
+- Produktions-`docker-compose.yml` nutzt vorgefertigte **GHCR-Images**
+  (`ghcr.io/toupsy/turmstatus-{backend,frontend}`) – die NAS baut nicht selbst.
+- GitHub-Actions-Workflow `.github/workflows/docker.yml` baut **Multi-Arch**
+  (amd64 + arm64) und pusht nach GHCR.
+- `dlrg-turmstatus-*`-Containernamen, Healthchecks auf allen Services,
+  benanntes Volume `turmstatus-db`, eigenes Bridge-Netz.
+- Secrets via **Portainer-Environment-Variablen** (Pflichtwerte mit `:?`),
+  nicht in Git/`.env`.
+- `docker-compose.build.yml` für lokales Bauen/Entwicklung.
+- Anleitung `docs/UGREEN_PORTAINER.md`.
 
 ## Standard-Zugänge (Seed)
 - Hauptwache: `hauptwache` / `wache2024`

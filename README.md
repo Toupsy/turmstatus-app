@@ -32,13 +32,37 @@ durch einen digitalen Genehmigungs-Workflow und zeigt die Lage aller **Türme**,
 
 Architektur-Details siehe [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Schnellstart (Docker)
+## Deployment-Varianten
+
+| Zweck | Datei | Images |
+|---|---|---|
+| **Produktion (NAS/Portainer)** | `docker-compose.yml` | vorgefertigte GHCR-Images (NAS baut nicht selbst) |
+| **Lokal / Entwicklung** | `docker-compose.build.yml` | werden lokal aus dem Quellcode gebaut |
+
+### A) Produktion auf NAS (empfohlen)
+
+Vorgefertigte Multi-Arch-Images (amd64 + arm64) werden per GitHub Actions nach
+GHCR gebaut; die NAS lädt sie nur. Secrets werden als Environment-Variablen im
+**Portainer-Stack** gesetzt – keine `.env`-Datei, keine Secrets in Git.
+
+➡️ Schritt-für-Schritt: **[docs/UGREEN_PORTAINER.md](docs/UGREEN_PORTAINER.md)**
+(gilt sinngemäß auch für Synology, siehe [INSTALL_SYNOLOGY.md](INSTALL_SYNOLOGY.md)).
+
+Per CLI (Secrets als Umgebungsvariablen übergeben):
+
+```bash
+POSTGRES_PASSWORD=$(openssl rand -base64 24) \
+SECRET_KEY=$(openssl rand -hex 32) \
+ADMIN_PASSWORD=$(openssl rand -base64 24) \
+docker compose up -d
+```
+
+### B) Lokal selbst bauen
 
 ```bash
 git clone <repo> turmstatus-app && cd turmstatus-app
-cp .env.example .env
-# .env bearbeiten: SECRET_KEY, Passwörter ändern!
-docker compose up -d --build
+POSTGRES_PASSWORD=test SECRET_KEY=test ADMIN_PASSWORD=wache2024 \
+  docker compose -f docker-compose.build.yml up -d --build
 ```
 
 Anwendung öffnen: **http://localhost:3456** (bzw. `http://<NAS-IP>:3456`).
@@ -47,7 +71,7 @@ Anwendung öffnen: **http://localhost:3456** (bzw. `http://<NAS-IP>:3456`).
 
 | Rolle | Benutzer | Passwort |
 |---|---|---|
-| Hauptwache | `hauptwache` | `wache2024` (aus `.env`) |
+| Hauptwache | `hauptwache` | dein `ADMIN_PASSWORD` |
 | Turmführer | `turmfuehrer1` … `turmfuehrer4` | `turm2024` |
 | Wachgänger | `wache1_1`, `wache1_2`, … | `wache2024` |
 
@@ -55,12 +79,11 @@ Anwendung öffnen: **http://localhost:3456** (bzw. `http://<NAS-IP>:3456`).
 
 ## Update
 
-```bash
-git pull
-docker compose up -d --build
-```
+- **NAS/Portainer:** neue Images bauen lassen (Push auf `main` oder Workflow
+  manuell) → in Portainer **Pull and redeploy**.
+- **Lokal:** `git pull && docker compose -f docker-compose.build.yml up -d --build`
 
-Die PostgreSQL-Daten bleiben im Named-Volume `db_data` erhalten.
+Die PostgreSQL-Daten bleiben im Named-Volume `turmstatus-db` erhalten.
 
 ## Installation auf Synology NAS
 

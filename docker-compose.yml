@@ -1,55 +1,87 @@
-# Eigenständige Docker-Compose-Datei – alle Werte direkt eingetragen, keine .env nötig.
+# ============================================================
+# Turmstatus – Wach- und Statussystem · Produktions-Deployment
+# Optimiert für UGREEN NAS (UGOS Pro) + Portainer.
 #
-# SICHERHEIT: Die mit "AENDERN_" markierten Platzhalter VOR dem Start durch echte
-# Geheimnisse ersetzen. Diese NICHT ins Git committen – nur lokal/in Portainer setzen.
-# Neue Werte erzeugen:
-#   POSTGRES_PASSWORD / ADMIN_PASSWORD:  openssl rand -base64 24
-#   SECRET_KEY:                          openssl rand -hex 32
+# Die Container-Images werden per GitHub Actions als Multi-Arch-Images
+# (amd64 + arm64) nach GHCR gebaut. Die NAS LÄDT die Images nur – sie
+# baut NICHT selbst (schnell & ressourcenschonend auf dem NAS).
 #
-# Erst-Login Hauptwache:  Benutzer "hauptwache" / Passwort = ADMIN_PASSWORD.
-# Nach dem ersten Login das Admin-Passwort in der Benutzerverwaltung ändern.
+# Secrets werden NICHT in dieser Datei gespeichert, sondern als
+# Environment-Variablen direkt im Portainer-Stack gesetzt (Stack-Editor
+# → "Environment variables"). So liegt kein Geheimnis in Git oder auf der
+# Platte. Pflichtwerte (mit :? markiert) verhindern einen Start ohne Secret.
 #
-# Start:   docker compose up -d --build
-# Aufruf:  http://<NAS-IP>:3456
+# Erforderliche Variablen:  POSTGRES_PASSWORD, SECRET_KEY, ADMIN_PASSWORD
+# Optionale Variablen:      HTTP_PORT (Standard 3456), CORS_ORIGINS,
+#                           POSTGRES_USER, POSTGRES_DB, ADMIN_USERNAME,
+#                           IMAGE_TAG (Standard latest)
+#
+# Erzeugen sicherer Werte:
+#   openssl rand -base64 24   # POSTGRES_PASSWORD / ADMIN_PASSWORD
+#   openssl rand -hex 32      # SECRET_KEY
+# ============================================================
 
 services:
   db:
     image: postgres:16-alpine
+    container_name: dlrg-turmstatus-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: turmstatus
-      POSTGRES_PASSWORD: AENDERN_db_passwort        # identisch mit DATABASE_URL unten setzen
-      POSTGRES_DB: turmstatus
+      POSTGRES_USER: ${POSTGRES_USER:-turmstatus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss im Portainer-Stack gesetzt werden}
+      POSTGRES_DB: ${POSTGRES_DB:-turmstatus}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - turmstatus-db:/var/lib/postgresql/data
+    networks:
+      - turmstatus
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U turmstatus"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    build: ./backend
+    image: ghcr.io/toupsy/turmstatus-backend:${IMAGE_TAG:-latest}
+    container_name: dlrg-turmstatus-backend
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg2://turmstatus:AENDERN_db_passwort@db:5432/turmstatus
-      SECRET_KEY: AENDERN_langer_zufallswert
-      ADMIN_USERNAME: hauptwache
-      ADMIN_PASSWORD: AENDERN_admin_passwort
-      CORS_ORIGINS: "*"
-    expose:
-      - "8000"
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-turmstatus}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss gesetzt werden}@db:5432/${POSTGRES_DB:-turmstatus}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY muss im Portainer-Stack gesetzt werden}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD muss im Portainer-Stack gesetzt werden}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    networks:
+      - turmstatus
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/toupsy/turmstatus-frontend:${IMAGE_TAG:-latest}
+    container_name: dlrg-turmstatus-frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      - "3456:80"                              # Host-Port 3456 -> bei Bedarf hier ändern (z. B. "3460:80")
+      - "${HTTP_PORT:-3456}:80"
+    networks:
+      - turmstatus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  turmstatus:
+    driver: bridge
 
 volumes:
-  db_data:
+  turmstatus-db:
