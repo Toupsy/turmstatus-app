@@ -41,7 +41,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Anwendung öffnen: **http://localhost:3050** (bzw. `http://<NAS-IP>:3050`).
+Anwendung öffnen: **http://localhost:3456** (bzw. `http://<NAS-IP>:3456`).
 
 ### Standard-Logins (Seed-Daten)
 

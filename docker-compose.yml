@@ -35,7 +35,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${HTTP_PORT:-3050}:80"
+      - "${HTTP_PORT:-3456}:80"
 
 volumes:
   db_data:

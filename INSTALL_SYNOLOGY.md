@@ -8,7 +8,7 @@ DiskStation mit **Container Manager** (DSM 7.2+). Das Image ist für **x86_64** 
 
 - Synology NAS mit DSM 7.2 oder neuer
 - Paket **Container Manager** (im Paket-Zentrum installieren) – enthält Docker & Compose
-- Ein freier Port (Standard: `3050`)
+- Ein freier Port (Standard: `3456`)
 - Zugriff per DSM-Weboberfläche oder SSH
 
 ---
@@ -24,7 +24,7 @@ DiskStation mit **Container Manager** (DSM 7.2+). Das Image ist für **x86_64** 
    - `.env.example` nach `.env` kopieren und bearbeiten.
    - **Unbedingt ändern:** `SECRET_KEY` (z. B. `openssl rand -hex 32`),
      `POSTGRES_PASSWORD`, `ADMIN_PASSWORD`.
-   - Bei Bedarf `HTTP_PORT` anpassen, falls `3050` belegt ist.
+   - Bei Bedarf `HTTP_PORT` anpassen, falls `3456` belegt ist.
 
 3. **Projekt anlegen**
    - Container Manager → **Projekt** → **Erstellen**.
@@ -34,7 +34,7 @@ DiskStation mit **Container Manager** (DSM 7.2+). Das Image ist für **x86_64** 
    - **Erstellen** und den Build-/Startvorgang abwarten (der erste Build dauert einige Minuten).
 
 4. **Aufrufen**
-   - Browser: `http://<NAS-IP>:3050`
+   - Browser: `http://<NAS-IP>:3456`
    - Anmeldung mit dem in `.env` gesetzten Hauptwache-Konto.
 
 ---
@@ -96,7 +96,7 @@ Im Container Manager alternativ: Projekt → **Aktion** → **Erstellen/Neu aufb
 Für Zugriff über einen Domainnamen mit TLS:
 
 1. DSM → **Systemsteuerung** → **Anmeldeportal** → **Erweitert** → **Reverse Proxy**.
-2. Neuer Eintrag: Quelle `https://turmstatus.example.de:443` → Ziel `http://localhost:3050`.
+2. Neuer Eintrag: Quelle `https://turmstatus.example.de:443` → Ziel `http://localhost:3456`.
 3. Unter **Eigene WebSocket-Header aktivieren** sicherstellen, dass `Upgrade`/`Connection`
    durchgereicht werden (für die Echtzeit-Karte erforderlich).
 4. Zertifikat (Let's Encrypt) in DSM dem Reverse-Proxy-Host zuweisen.
@@ -107,7 +107,7 @@ Für Zugriff über einen Domainnamen mit TLS:
 
 | Problem | Prüfen |
 |---|---|
-| Seite nicht erreichbar | Läuft `frontend`-Container? Port `3050` freigegeben/Firewall? |
+| Seite nicht erreichbar | Läuft `frontend`-Container? Port `3456` freigegeben/Firewall? |
 | „Zu viele Anfragen“ | Rate-Limit – kurz warten. |
 | Karte aktualisiert nicht live | WebSocket über Reverse Proxy durchgereicht? Fallback-Polling greift nach 30 s. |
 | Login schlägt fehl | `ADMIN_*` in `.env` korrekt? Logs: `docker compose logs backend`. |
