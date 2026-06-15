@@ -1,88 +1,57 @@
 # ============================================================
-# Turmstatus – Wach- und Statussystem · Produktions-Deployment
-# Optimiert für UGREEN NAS (UGOS Pro) + Portainer.
+# Turmstatus – Docker Compose
 #
-# Die Container-Images werden per GitHub Actions als Multi-Arch-Images
-# (amd64 + arm64) nach GHCR gebaut. Die NAS LÄDT die Images nur – sie
-# baut NICHT selbst (schnell & ressourcenschonend auf dem NAS).
+# Vorgefertigtes Multi-Arch-Image aus GHCR (die NAS baut nicht selbst).
+# Secrets stehen NICHT hier, sondern in einer .env neben docker-compose.yml
+# (gitignored) bzw. als Portainer-Stack-Environment-Variablen.
+#   cp .env.example .env  →  Werte eintragen  →  docker compose up -d
 #
-# Secrets werden NICHT in dieser Datei gespeichert, sondern als
-# Environment-Variablen direkt im Portainer-Stack gesetzt (Stack-Editor
-# → "Environment variables"). So liegt kein Geheimnis in Git oder auf der
-# Platte. Pflichtwerte (mit :? markiert) verhindern einen Start ohne Secret.
-#
-# Erforderliche Variablen:  POSTGRES_PASSWORD, SECRET_KEY, ADMIN_PASSWORD
-# Optionale Variablen:      HTTP_PORT (Standard 3456), CORS_ORIGINS,
-#                           POSTGRES_USER, POSTGRES_DB, ADMIN_USERNAME,
-#                           IMAGE_TAG (Standard latest)
-#
-# Erzeugen sicherer Werte:
-#   openssl rand -base64 24   # POSTGRES_PASSWORD / ADMIN_PASSWORD
-#   openssl rand -hex 32      # SECRET_KEY
+# Lokal selbst bauen: docker compose -f docker-compose.build.yml up -d --build
 # ============================================================
 
+x-turmstatus-base: &turmstatus-base
+  image: ghcr.io/toupsy/turmstatus-app:${IMAGE_TAG:-latest}
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - turmstatus-data:/app/data
+  networks:
+    - turmstatus
+
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: dlrg-turmstatus-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-turmstatus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss im Portainer-Stack gesetzt werden}
-      POSTGRES_DB: ${POSTGRES_DB:-turmstatus}
-    volumes:
-      - turmstatus-db:/var/lib/postgresql/data
-    networks:
-      - turmstatus
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus} -d ${POSTGRES_DB:-turmstatus}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-
-  backend:
-    image: ghcr.io/toupsy/turmstatus-backend:${IMAGE_TAG:-latest}
-    container_name: dlrg-turmstatus-backend
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-turmstatus}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss gesetzt werden}@db:5432/${POSTGRES_DB:-turmstatus}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY muss im Portainer-Stack gesetzt werden}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD muss im Portainer-Stack gesetzt werden}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
-    networks:
-      - turmstatus
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  frontend:
-    image: ghcr.io/toupsy/turmstatus-frontend:${IMAGE_TAG:-latest}
-    container_name: dlrg-turmstatus-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
+  # Haupt-App (Lagebild) auf Port 3000 → Host HTTP_PORT (Default 3456)
+  turmstatus:
+    <<: *turmstatus-base
+    container_name: dlrg-turmstatus
     ports:
-      - "${HTTP_PORT:-3456}:80"
-    networks:
-      - turmstatus
+      - "${HTTP_PORT:-3456}:3000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 10s
+
+  # Admin-Panel auf Port 3001 (gleiches Image, anderer Entry-Point)
+  turmstatus-admin:
+    <<: *turmstatus-base
+    container_name: dlrg-turmstatus-admin
+    command: node server/admin-server.js
+    environment:
+      ADMIN_PORT: "3001"
+    ports:
+      - "${ADMIN_HTTP_PORT:-3457}:3001"
+    depends_on:
+      - turmstatus
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
       start_period: 10s
 
 networks:
   turmstatus:
-    driver: bridge
 
 volumes:
-  turmstatus-db:
+  turmstatus-data:

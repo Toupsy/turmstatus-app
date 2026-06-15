@@ -1,66 +1,46 @@
 # ============================================================
-# Turmstatus – LOKALE Entwicklung / Selbst-Bauen der Images
+# Turmstatus – Docker Compose (lokal selbst bauen / Entwicklung)
 #
-# Diese Variante baut die Images aus dem Quellcode statt sie aus GHCR zu
-# laden. Nutzung z. B. zum Testen vor dem Push oder ohne GHCR-Zugang:
-#
-#   POSTGRES_PASSWORD=test SECRET_KEY=test ADMIN_PASSWORD=test \
-#     docker compose -f docker-compose.build.yml up -d --build
-#
-# Für den Produktivbetrieb auf dem NAS die normale docker-compose.yml
-# (vorgefertigte GHCR-Images) verwenden.
+#   POSTGRES_PASSWORD nicht nötig – SQLite-Datei im Volume.
+#   MASTER_SECRET=test SALT=testtesttesttest SESSION_SECRET=test \
+#     ADMIN_PASSWORD=wache2024 docker compose -f docker-compose.build.yml up -d --build
 # ============================================================
 
+x-turmstatus-base: &turmstatus-base
+  build: .
+  restart: unless-stopped
+  environment:
+    MASTER_SECRET: ${MASTER_SECRET:?MASTER_SECRET muss gesetzt sein (min. 32 Zeichen)}
+    SALT: ${SALT:?SALT muss gesetzt sein (min. 16 Zeichen)}
+    SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET muss gesetzt sein (min. 16 Zeichen)}
+    ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD muss gesetzt sein}
+    REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
+  volumes:
+    - turmstatus-data:/app/data
+  networks:
+    - turmstatus
+
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: dlrg-turmstatus-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-turmstatus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turmstatus}
-      POSTGRES_DB: ${POSTGRES_DB:-turmstatus}
-    volumes:
-      - turmstatus-db:/var/lib/postgresql/data
-    networks:
-      - turmstatus
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-turmstatus} -d ${POSTGRES_DB:-turmstatus}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-
-  backend:
-    build: ./backend
-    container_name: dlrg-turmstatus-backend
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-turmstatus}:${POSTGRES_PASSWORD:-turmstatus}@db:5432/${POSTGRES_DB:-turmstatus}
-      SECRET_KEY: ${SECRET_KEY:-dev_secret_change_me}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
-    networks:
-      - turmstatus
-
-  frontend:
-    build: ./frontend
-    container_name: dlrg-turmstatus-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
+  turmstatus:
+    <<: *turmstatus-base
+    container_name: dlrg-turmstatus
     ports:
-      - "${HTTP_PORT:-3456}:80"
-    networks:
+      - "${HTTP_PORT:-3456}:3000"
+
+  turmstatus-admin:
+    <<: *turmstatus-base
+    container_name: dlrg-turmstatus-admin
+    command: node server/admin-server.js
+    environment:
+      ADMIN_PORT: "3001"
+    ports:
+      - "${ADMIN_HTTP_PORT:-3457}:3001"
+    depends_on:
       - turmstatus
 
 networks:
   turmstatus:
-    driver: bridge
 
 volumes:
-  turmstatus-db:
+  turmstatus-data:
