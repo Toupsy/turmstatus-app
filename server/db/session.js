@@ -3,6 +3,7 @@
 // (identisch zum Wachplan-Generator)
 // ============================================================
 
+const path = require('path');
 const session = require('express-session');
 const SqliteStore = require('connect-sqlite3')(session);
 const { dbPath } = require('./connection');
@@ -11,7 +12,10 @@ const { dbPath } = require('./connection');
 // admin-server.js nutzt false/false → per Option überschreibbar.
 // secure: GDPR (Art. 32) – setzen wenn HTTPS/TLS aktiv.
 function createSessionMiddleware({ resave = true, saveUninitialized = true } = {}) {
-  const store = new SqliteStore({ db: dbPath, mode: 0o666 });
+  // connect-sqlite3 baut den Pfad als (dir || '.') + '/' + db – d.h. ein
+  // absoluter dbPath würde zu './/absoluter/pfad' (relativer Unsinn).
+  // Dir und Dateiname müssen daher getrennt übergeben werden.
+  const store = new SqliteStore({ db: path.basename(dbPath), dir: path.dirname(dbPath), mode: 0o666 });
   store.on('error', (err) => {
     console.warn('⚠ Session store error (continuing):', err.message);
   });
