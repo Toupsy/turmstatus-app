@@ -101,6 +101,30 @@ export default function AdminTowers() {
     }
   };
 
+  const deleteTower = async (t) => {
+    if (!window.confirm(`Turm „${t.name}“ wirklich löschen?`)) return;
+    setError("");
+    try {
+      await api.delete(`/towers/${t.id}`);
+      if (editTowerId === t.id) resetTower();
+      await refreshTowers();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Fehler beim Löschen des Turms");
+    }
+  };
+
+  const deleteBoat = async (b) => {
+    if (!window.confirm(`Boot „${b.name}“ wirklich löschen?`)) return;
+    setError("");
+    try {
+      await api.delete(`/boats/${b.id}`);
+      if (editBoatId === b.id) resetBoat();
+      await refreshBoats();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Fehler beim Löschen des Boots");
+    }
+  };
+
   const saveBoat = async (e) => {
     e.preventDefault();
     setError("");
@@ -305,7 +329,12 @@ export default function AdminTowers() {
               <td>{t.call_sign}</td>
               <td>{t.latitude.toFixed(4)}, {t.longitude.toFixed(4)}</td>
               <td>{t.required_staff}</td>
-              <td><button className="btn" onClick={() => editTower(t)}>Bearbeiten</button></td>
+              <td>
+                <div className="row" style={{ background: "none", border: "none", padding: 0, gap: 6 }}>
+                  <button className="btn" onClick={() => editTower(t)}>Bearbeiten</button>
+                  <button className="btn btn-red" onClick={() => deleteTower(t)}>Löschen</button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -333,7 +362,12 @@ export default function AdminTowers() {
                   ? `${b.latitude.toFixed(4)}, ${b.longitude.toFixed(4)}`
                   : "—"}
               </td>
-              <td><button className="btn" onClick={() => editBoat(b)}>Bearbeiten</button></td>
+              <td>
+                <div className="row" style={{ background: "none", border: "none", padding: 0, gap: 6 }}>
+                  <button className="btn" onClick={() => editBoat(b)}>Bearbeiten</button>
+                  <button className="btn btn-red" onClick={() => deleteBoat(b)}>Löschen</button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

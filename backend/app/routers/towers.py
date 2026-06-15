@@ -70,3 +70,31 @@ def update_tower(
     db.refresh(tower)
     notify("towers_changed", {"id": tower.id})
     return serialize(tower)
+
+
+@router.delete("/{tower_id}", status_code=204)
+def delete_tower(
+    tower_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(Role.HAUPTWACHE)),
+):
+    tower = db.get(Tower, tower_id)
+    if not tower:
+        raise HTTPException(404, "Turm nicht gefunden")
+    # Zugeordnete Datensätze blockieren das Löschen – erst neu zuordnen.
+    blockers = []
+    if tower.users:
+        blockers.append(f"{len(tower.users)} Benutzer")
+    if tower.guards:
+        blockers.append(f"{len(tower.guards)} Wachgänger")
+    if tower.boats:
+        blockers.append(f"{len(tower.boats)} Boote")
+    if blockers:
+        raise HTTPException(
+            409,
+            "Turm kann nicht gelöscht werden – noch zugeordnet: " + ", ".join(blockers),
+        )
+    log_action(db, user, "TOWER_DELETED", "tower", tower.id, {"name": tower.name})
+    db.delete(tower)
+    db.commit()
+    notify("towers_changed", {"id": tower_id})
