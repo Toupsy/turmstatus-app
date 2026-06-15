@@ -26,7 +26,7 @@ const adminApi = require('./api/admin');
 
 const app = express();
 app.set('trust proxy', 1);
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';
 
 // App-Version beim Start laden (nicht im require gecacht)

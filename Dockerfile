@@ -11,7 +11,7 @@ RUN mkdir -p /app/data
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
-ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0
-EXPOSE 3000
+ENV NODE_ENV=production PORT=3002 HOST=0.0.0.0
+EXPOSE 3002
 
 CMD ["npm", "start"]

@@ -17,7 +17,7 @@ Vollständiger Neubau der Turmstatus-App von FastAPI/PostgreSQL/React auf
 - **Rollen** serverseitig erzwungen (HAUPTWACHE/TURMFUEHRER/WACHGAENGER).
 - **Realtime**: WebSocket-Broadcast aller Lageänderungen an alle Clients + 30-s-Polling-Fallback.
 - **Frontend**: Vanilla-JS-SPA mit Leaflet-Einsatzkarte, Dashboard, Anfragen-Tab,
-  Verwaltungs-Tab (Admin). Separates self-contained Admin-Panel (Port 3001).
+  Verwaltungs-Tab (Admin). Separates self-contained Admin-Panel (Port 3003).
 - **Audit-Log** auf allen Mutationen; Admin-Ansicht.
 - **Demo-Seed**: 4 Türme + 2 Boote an Ostsee-Koordinaten beim Erststart (wenn leer).
 - **Deployment**: Single Multi-Arch-Image (GHCR), `docker-compose.yml` + `.build.yml`,

@@ -30,7 +30,7 @@ auf einer OpenStreetMap-Karte (Leaflet).
 
 - **Frontend:** reines **Vanilla JS** (kein Framework), `public/Turmstatus.html` + `public/js/*`.
 - **Backend:** **Express + SQLite**, Session-Auth (bcryptjs), WebSocket-Live-Lagebild.
-- **Start:** `npm start` → `server/server.js` (Port 3000); Admin: `server/admin-server.js` (Port 3001).
+- **Start:** `npm start` → `server/server.js` (Port 3002); Admin: `server/admin-server.js` (Port 3003).
 - **Tests:** `npm test` (Node `--test`).
 
 ---
@@ -39,8 +39,8 @@ auf einer OpenStreetMap-Karte (Leaflet).
 
 **Backend `server/`:**
 ```
-server.js          Express (Port 3000), Static aus ../public, Route-Registration, /api/version, /api/config, WS
-admin-server.js    Admin-Server (Port 3001), gleiches Image, anderer Entry-Point (Benutzerverwaltung + Audit)
+server.js          Express (Port 3002), Static aus ../public, Route-Registration, /api/version, /api/config, WS
+admin-server.js    Admin-Server (Port 3003), gleiches Image, anderer Entry-Point (Benutzerverwaltung + Audit)
 realtime.js        WebSocket-Server (/api/ws): broadcast(type) an ALLE Clients (gemeinsames Lagebild)
 status.js          Reine Statuslogik: deriveTowerStatus() (DOM-/DB-frei, testbar)
 middleware.js      requireAuth (lädt req.user inkl. Rolle) + requireRole(...) (HAUPTWACHE darf alles)

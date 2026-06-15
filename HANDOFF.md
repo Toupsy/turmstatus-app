@@ -19,7 +19,7 @@ auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammen
 - Router: `auth`, `towers`, `guards`, `boats`, `requests`, `dashboard`, `admin`.
 - `-1`/`+1`-Workflow vollständig (beantragen → genehmigen/ablehnen → Rückkehr) mit Statuslogik.
 - Abgeleitete Turmfarbe (`status.js`), Audit-Log auf allen Mutationen, Realtime-Broadcast.
-- `server.js` (Port 3000) + `admin-server.js` (Port 3001), `/api/version`, `/api/config`, `/health`.
+- `server.js` (Port 3002) + `admin-server.js` (Port 3003), `/api/version`, `/api/config`, `/health`.
 
 ### ✅ M3 – Frontend (Vanilla JS + Leaflet)
 - SPA `public/Turmstatus.html` + `public/js/*` (state/utils/api/auth/map/views/ws/init).

@@ -34,15 +34,15 @@ Workflow `.github/workflows/docker.yml`:
    | `SESSION_SECRET` | ✅ | `<rand-base64-32>` (min. 16 Zeichen) |
    | `ADMIN_USERNAME` | – | `hauptwache` |
    | `ADMIN_PASSWORD` | ✅* | starkes Passwort (*für Erst-Admin) |
-   | `HTTP_PORT` | – | `3456` |
-   | `ADMIN_HTTP_PORT` | – | `3457` |
+   | `HTTP_PORT` | – | `3002` |
+   | `ADMIN_HTTP_PORT` | – | `3003` |
    | `COOKIE_SECURE` | – | `true` (hinter HTTPS-Proxy) |
    | `IMAGE_TAG` | – | `latest` |
 4. **Deploy the stack** → warten bis `dlrg-turmstatus` und `dlrg-turmstatus-admin` `healthy` sind.
 
 ## 3. Zugriff
-- App: `http://<NAS-IP>:3456` – Login `hauptwache` / `ADMIN_PASSWORD` (danach Passwort ändern).
-- Admin-Panel: `http://<NAS-IP>:3457`.
+- App: `http://<NAS-IP>:3002` – Login `hauptwache` / `ADMIN_PASSWORD` (danach Passwort ändern).
+- Admin-Panel: `http://<NAS-IP>:3003`.
 
 ## 4. Updates
 Neues Image bauen lassen → **Stacks → turmstatus → Pull and redeploy** (Re-pull image aktiviert).
@@ -59,6 +59,6 @@ docker run --rm -v turmstatus-data:/data -v $(pwd):/backup alpine \
 ```
 
 ## 6. HTTPS / Reverse Proxy
-Reverse Proxy (Nginx Proxy Manager, Traefik, NAS-Proxy) auf `http://<NAS-IP>:3456` zeigen lassen
+Reverse Proxy (Nginx Proxy Manager, Traefik, NAS-Proxy) auf `http://<NAS-IP>:3002` zeigen lassen
 und **WebSocket-Upgrade** (`Upgrade`/`Connection`-Header) für `/api/ws` durchreichen – sonst greift
 nur das 30-s-Polling. Bei TLS `COOKIE_SECURE=true` setzen.

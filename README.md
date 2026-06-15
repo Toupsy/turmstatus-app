@@ -17,7 +17,7 @@ durch einen digitalen Genehmigungs-Workflow und zeigt die Lage aller **Türme**,
 - **Dashboard Hauptwache**: Lage-Kennzahlen (Türme, im Dienst, aktive -1, Boote, offene Anfragen).
 - **Echtzeit** über WebSockets (mit Polling-Fallback alle 30 s).
 - **Rollen** serverseitig erzwungen: Hauptwache, Turmführer, Wachgänger.
-- **Benutzerverwaltung** + **Audit-Protokoll** (Wer/Wann/Was), im Admin-Panel (Port 3001) oder
+- **Benutzerverwaltung** + **Audit-Protokoll** (Wer/Wann/Was), im Admin-Panel (Port 3003) oder
   in der App (Tab „Verwaltung", nur Hauptwache).
 - **Responsive** für Smartphone, Tablet und Desktop.
 
@@ -39,7 +39,7 @@ SALT=$(openssl rand -base64 16) \
 SESSION_SECRET=$(openssl rand -base64 32) \
 ADMIN_USERNAME=hauptwache ADMIN_PASSWORD=wache2024 \
 npm start
-# App: http://localhost:3000   ·   Admin-Panel: npm run start:admin → http://localhost:3001
+# App: http://localhost:3002   ·   Admin-Panel: npm run start:admin → http://localhost:3003
 ```
 Beim ersten Start werden ein Hauptwache-Konto sowie ein Demo-Lagebild (4 Türme, 2 Boote) angelegt.
 
@@ -48,7 +48,7 @@ Beim ersten Start werden ein Hauptwache-Konto sowie ein Demo-Lagebild (4 Türme,
 cp .env.example .env   # Werte (Secrets) eintragen
 docker compose up -d   # nutzt vorgefertigtes GHCR-Image
 ```
-- App: `http://<host>:3456` (`HTTP_PORT`), Admin-Panel: `http://<host>:3457` (`ADMIN_HTTP_PORT`).
+- App: `http://<host>:3002` (`HTTP_PORT`), Admin-Panel: `http://<host>:3003` (`ADMIN_HTTP_PORT`).
 - Lokal selbst bauen: `docker compose -f docker-compose.build.yml up -d --build`.
 - Schritt-für-Schritt (Portainer/UGREEN): **[docs/PORTAINER.md](docs/PORTAINER.md)**.
 
@@ -68,6 +68,6 @@ Die SQLite-Daten bleiben im Named-Volume `turmstatus-data` (`/app/data/turmstatu
 ## Entwicklung & Tests
 ```bash
 npm test          # Node --test: status, ids, crypto, Integrationstest (-1/+1)
-npm start         # Haupt-Server (3000)
-npm run start:admin  # Admin-Server (3001)
+npm start         # Haupt-Server (3002)
+npm run start:admin  # Admin-Server (3003)
 ```

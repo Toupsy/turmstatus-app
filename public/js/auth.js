@@ -134,7 +134,7 @@ async function logout() {
 }
 
 function openAdminPanel() {
-  const url = `${window.location.protocol}//${window.location.hostname}:3001`;
+  const url = `${window.location.protocol}//${window.location.hostname}:3003`;
   window.open(url, '_blank');
 }
 

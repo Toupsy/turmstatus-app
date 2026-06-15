@@ -19,32 +19,32 @@ x-turmstatus-base: &turmstatus-base
     - turmstatus
 
 services:
-  # Haupt-App (Lagebild) auf Port 3000 → Host HTTP_PORT (Default 3456)
+  # Haupt-App (Lagebild) auf Port 3002 → Host HTTP_PORT (Default 3002)
   turmstatus:
     <<: *turmstatus-base
     container_name: dlrg-turmstatus
     ports:
-      - "${HTTP_PORT:-3456}:3000"
+      - "${HTTP_PORT:-3002}:3002"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
 
-  # Admin-Panel auf Port 3001 (gleiches Image, anderer Entry-Point)
+  # Admin-Panel auf Port 3003 (gleiches Image, anderer Entry-Point)
   turmstatus-admin:
     <<: *turmstatus-base
     container_name: dlrg-turmstatus-admin
     command: node server/admin-server.js
     environment:
-      ADMIN_PORT: "3001"
+      ADMIN_PORT: "3003"
     ports:
-      - "${ADMIN_HTTP_PORT:-3457}:3001"
+      - "${ADMIN_HTTP_PORT:-3003}:3003"
     depends_on:
       - turmstatus
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
