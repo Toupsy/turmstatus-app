@@ -1,6 +1,9 @@
 # 🛟 Turmstatus – Digitales Wach- und Statussystem
 
 Zentrales Lage- und Statussystem für einen Wasserrettungsdienst an der Ostsee.
+Haupt-Einsatzgebiet ist die **Wasserrettungsstation Dahme** (ZWRD-K Wachstation 206,
+Hauptwache An der Strandpromenade 30a, 23747 Dahme) mit 7 Rettungstürmen entlang
+des Badestrandes (Süd- bis Nordstrand) und 2 Motorrettungsbooten.
 Ersetzt den bisherigen Funkverkehr (`-1` beim Verlassen des Bereichs, `+1` bei Rückkehr)
 durch einen digitalen Genehmigungs-Workflow und zeigt die Lage aller **Türme**,
 **Wachgänger** und **Boote** in **Echtzeit** auf einer OpenStreetMap-Karte.
@@ -72,7 +75,7 @@ Anwendung öffnen: **http://localhost:3456** (bzw. `http://<NAS-IP>:3456`).
 | Rolle | Benutzer | Passwort |
 |---|---|---|
 | Hauptwache | `hauptwache` | dein `ADMIN_PASSWORD` |
-| Turmführer | `turmfuehrer1` … `turmfuehrer4` | `turm2024` |
+| Turmführer | `turmfuehrer1` … `turmfuehrer7` | `turm2024` |
 | Wachgänger | `wache1_1`, `wache1_2`, … | `wache2024` |
 
 > ⚠️ **Alle Standardpasswörter vor dem Produktivbetrieb ändern.**

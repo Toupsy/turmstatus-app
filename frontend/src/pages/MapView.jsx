@@ -12,14 +12,14 @@ import {
 export default function MapView() {
   const { towers, guards, boats } = useStore();
 
-  // Kartenmittelpunkt: Durchschnitt der Türme, sonst Travemünde.
+  // Kartenmittelpunkt: Durchschnitt der Türme, sonst Dahme (Hauptwache).
   const center =
     towers.length > 0
       ? [
           towers.reduce((s, t) => s + t.latitude, 0) / towers.length,
           towers.reduce((s, t) => s + t.longitude, 0) / towers.length,
         ]
-      : [53.96, 10.87];
+      : [54.212, 11.092];
 
   return (
     <div className="content map" style={{ position: "relative" }}>

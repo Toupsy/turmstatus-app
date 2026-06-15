@@ -1,7 +1,18 @@
-"""Idempotente Erst-Befüllung: Admin (Hauptwache) + Demo-Lage an der Ostsee.
+"""Idempotente Erst-Befüllung: Admin (Hauptwache) + Lage Wasserrettungsstation Dahme.
 
 Wird beim Start ausgeführt und legt nur dann Daten an, wenn noch keine Türme
 existieren. Passwörter werden gehasht gespeichert.
+
+Haupt-Einsatzgebiet: DLRG-Wasserrettungsstation Dahme (ZWRD-K Wachstation 206),
+Hauptwache „An der Strandpromenade 30a, 23747 Dahme/Ostholstein“. Die Station
+sichert rund 6 km Ostsee-Badestrand (Süd- bis Nordstrand) mit 7 Rettungstürmen
+und 2 Motorrettungsbooten ab.
+
+ACHTUNG – Koordinaten: Die folgenden Turm-Positionen sind NÄHERUNGSWERTE, gleich-
+mäßig entlang des realen Dahmer Strandes (Südstrand/Dahmeshöved bis Nordstrand
+Richtung Kellenhusen) verteilt. Exakte GPS-Punkte je Turm sind öffentlich nicht
+abrufbar und sollten bei Gelegenheit per Google Maps/GPS nachgemessen und in der
+Admin-Oberfläche bzw. hier korrigiert werden.
 """
 
 from sqlalchemy.orm import Session
@@ -18,17 +29,21 @@ from .models import (
 )
 from .security import hash_password
 
-# Wachtürme an realistischen Ostsee-Strandkoordinaten (Lübecker Bucht / Travemünde).
+# Rettungstürme der Wasserrettungsstation Dahme – Näherungskoordinaten entlang des
+# Badestrandes von Süd (Dahmeshöved) nach Nord (Richtung Kellenhusen).
 TOWERS = [
-    {"name": "Turm Nord – Brodten", "call_sign": "Florian Wasser 11", "lat": 53.9710, "lon": 10.8780, "required_staff": 2},
-    {"name": "Turm Mitte – Travemünde", "call_sign": "Florian Wasser 12", "lat": 53.9580, "lon": 10.8730, "required_staff": 3},
-    {"name": "Turm Süd – Priwall", "call_sign": "Florian Wasser 13", "lat": 53.9460, "lon": 10.8800, "required_staff": 2},
-    {"name": "Turm Timmendorf", "call_sign": "Florian Wasser 14", "lat": 53.9990, "lon": 10.7790, "required_staff": 2},
+    {"name": "Turm 1 – Südstrand (Dahmeshöved)", "call_sign": "Dahme 1", "lat": 54.1955, "lon": 11.0855, "required_staff": 2},
+    {"name": "Turm 2 – Südstrand", "call_sign": "Dahme 2", "lat": 54.2010, "lon": 11.0895, "required_staff": 2},
+    {"name": "Turm 3 – Strandpromenade Süd", "call_sign": "Dahme 3", "lat": 54.2065, "lon": 11.0915, "required_staff": 3},
+    {"name": "Turm 4 – Hauptstrand (Hauptwache)", "call_sign": "Dahme 4", "lat": 54.2120, "lon": 11.0928, "required_staff": 3},
+    {"name": "Turm 5 – Strandpromenade Nord", "call_sign": "Dahme 5", "lat": 54.2175, "lon": 11.0930, "required_staff": 3},
+    {"name": "Turm 6 – Nordstrand", "call_sign": "Dahme 6", "lat": 54.2230, "lon": 11.0922, "required_staff": 2},
+    {"name": "Turm 7 – Nordstrand (Richtung Kellenhusen)", "call_sign": "Dahme 7", "lat": 54.2285, "lon": 11.0905, "required_staff": 2},
 ]
 
 BOATS = [
-    {"name": "RTB Seehund", "call_sign": "Seenot 1", "status": BoatStatus.AT_TOWER, "tower_idx": 1},
-    {"name": "RTB Möwe", "call_sign": "Seenot 2", "status": BoatStatus.PATROL, "tower_idx": 0},
+    {"name": "Motorrettungsboot Dahme 1", "call_sign": "Boot Dahme 1", "status": BoatStatus.AT_TOWER, "tower_idx": 3},
+    {"name": "Motorrettungsboot Dahme 2", "call_sign": "Boot Dahme 2", "status": BoatStatus.PATROL, "tower_idx": 5},
 ]
 
 
