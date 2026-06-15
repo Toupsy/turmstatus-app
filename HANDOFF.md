@@ -2,66 +2,54 @@
 
 Statusdokument zum Projekt **Turmstatus** (digitales Wach- und Statussystem Wasserrettung).
 
+## Aktueller Stand
+**Voller Tech-Stack-Umbau abgeschlossen.** Die App wurde von
+FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestellt:
+**Express + SQLite + Vanilla JS**, Session-Auth, WebSocket-Lagebild, Admin-Server,
+GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
+auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
+
 ## Meilensteine
+### ✅ M1 – Infrastruktur (deckungsgleich Wachplan-Generator)
+- `db/connection.js`, `db/session.js`, `db/ids.js`, `db/crypto.js` 1:1 übernommen (nur DB-Name `turmstatus.db`).
+- `db/init.js`: Schema-Init, idempotente Migrationen, `validateEnv()`, Demo-Seed (Türme/Boote), Admin-Seed.
+- `db/audit.js` (`recordAudit`), `middleware.js` (`requireAuth`/`requireRole`).
 
-### ✅ M1 – Architektur & Datenmodell
-- Anforderungsanalyse, Technologieentscheidung und API-Design dokumentiert in
-  [ARCHITECTURE.md](ARCHITECTURE.md).
-- Datenmodell festgelegt: `User`, `Tower`, `Guard`, `Boat`, `MinusOneRequest`, `Operation`, `AuditLog`.
+### ✅ M2 – Domänen-Backend (Express)
+- Router: `auth`, `towers`, `guards`, `boats`, `requests`, `dashboard`, `admin`.
+- `-1`/`+1`-Workflow vollständig (beantragen → genehmigen/ablehnen → Rückkehr) mit Statuslogik.
+- Abgeleitete Turmfarbe (`status.js`), Audit-Log auf allen Mutationen, Realtime-Broadcast.
+- `server.js` (Port 3002) + `admin-server.js` (Port 3003), `/api/version`, `/api/config`, `/health`.
 
-### ✅ M2 – Backend (FastAPI)
-- SQLAlchemy-2-Modelle inkl. Enums (`backend/app/models.py`).
-- Auth: JWT/OAuth2-Password, bcrypt-Hashing (`security.py`), Rollen-Dependencies (`deps.py`).
-- Router: auth, towers, guards, boats, requests, dashboard, users, audit, operations(read).
-- `-1`/`+1`-Workflow vollständig: beantragen → genehmigen/ablehnen → Rückkehr, mit Statuslogik
-  für Wachgänger und abgeleiteter Turmfarbe.
-- Audit-Log für alle Mutationen (`audit.py`), Rate-Limiting (`limiter.py`).
-- WebSocket-Manager mit Broadcast (`ws.py`) + Endpoint `/api/ws` (Token-Auth).
-- Idempotenter Seed mit mehreren Türmen an Ostsee-Koordinaten, Turmführern, Wachgängern, Booten
-  (`seed.py`).
-- Dockerfile + Healthcheck.
+### ✅ M3 – Frontend (Vanilla JS + Leaflet)
+- SPA `public/Turmstatus.html` + `public/js/*` (state/utils/api/auth/map/views/ws/init).
+- Tabs: Karte (OSM/Leaflet, farbcodierte Türme + Marker), Dashboard, Anfragen, Verwaltung (Admin).
+- Login/Setup/Register, Passwortwechsel, rollenbasierte UI, WS-Live + 30-s-Polling-Fallback.
+- `public/admin.html` (self-contained) für den Admin-Server.
 
-### ✅ M3 – Frontend (React + Vite + Leaflet)
-- Auth-Flow (`Login`), Zustand-Store, axios-Client mit Token-Interceptor.
-- WebSocket-Client mit Auto-Reconnect + 30-s-Polling-Fallback (`ws.js`).
-- Seiten: Einsatzkarte (OSM/Leaflet, farbcodierte Türme + Marker), Dashboard Hauptwache,
-  Wachgänger-Panel (-1/+1), Turmführer-Panel, Benutzerverwaltung, Audit-Ansicht.
-- Rollenbasiertes Routing, responsives Layout.
+### ✅ M4 – Tests & CI
+- `npm test` (Node `--test`): status, ids, crypto, Integrationstest (Server-Boot + -1/+1).
+- Workflows: `test.yml`, `docker.yml` (Multi-Arch GHCR), `release.yml` (Semantic Release).
 
-### ✅ M4 – Deployment & Doku
-- `docker-compose.yml` (db/backend/frontend, Healthchecks, persistentes Volume).
-- `README.md`, `INSTALL_SYNOLOGY.md`.
+### ✅ M5 – Deployment & Doku
+- `Dockerfile`, `docker-compose.yml` (GHCR), `docker-compose.build.yml` (lokal), `.env.example`.
+- `CLAUDE.md`, `README.md`, `ARCHITECTURE.md`, `docs/PORTAINER.md`, `docs/FEATURES.md`.
 
-### ✅ M5 – NAS-/Portainer-Deployment (UGREEN, am Wachplan-Generator orientiert)
-- Produktions-`docker-compose.yml` nutzt vorgefertigte **GHCR-Images**
-  (`ghcr.io/toupsy/turmstatus-{backend,frontend}`) – die NAS baut nicht selbst.
-- GitHub-Actions-Workflow `.github/workflows/docker.yml` baut **Multi-Arch**
-  (amd64 + arm64) und pusht nach GHCR.
-- `dlrg-turmstatus-*`-Containernamen, Healthchecks auf allen Services,
-  benanntes Volume `turmstatus-db`, eigenes Bridge-Netz.
-- Secrets via **Portainer-Environment-Variablen** (Pflichtwerte mit `:?`),
-  nicht in Git/`.env`.
-- `docker-compose.build.yml` für lokales Bauen/Entwicklung.
-- Anleitung `docs/UGREEN_PORTAINER.md`.
-
-## Standard-Zugänge (Seed)
-- Hauptwache: `hauptwache` / `wache2024`
-- Turmführer: `turmfuehrer1..4` / `turm2024`
-- Wachgänger: `wache1_1`, `wache1_2`, … / `wache2024`
-(Passwörter über `.env` bzw. nach Login änderbar – vor Produktivbetrieb ändern.)
+## Standard-Zugänge
+- Hauptwache (Admin): `ADMIN_USERNAME` / `ADMIN_PASSWORD` (Seed beim Erststart).
+- Demo-Lagebild: 4 Türme + 2 Boote werden beim ersten Start angelegt (wenn `towers` leer).
 
 ## Bewusst offen / nächste Schritte
-- **Einsatzverwaltung**: Datenmodell `Operation` ist vorbereitet und per Read-API verfügbar;
-  die operative Verwaltung (Anlegen/Zuordnen von Einheiten, Alarmierung) ist noch nicht
-  implementiert (laut Auftrag bewusst nur vorbereitet).
-- **DB-Migrationen**: Aktuell `create_all` beim Start. Für Schemaänderungen im Betrieb
-  empfiehlt sich später Alembic.
-- **Live-Positionen**: Endpoint `PATCH /guards/{id}/position` vorhanden; eine kontinuierliche
-  GPS-Übermittlung aus dem Browser kann ergänzt werden.
-- **Tests**: Smoke-/Integrationstests (pytest) können als nächstes ergänzt werden.
+- **Zusammenführung mit dem Wachplan-Generator**: Da Infrastruktur deckungsgleich ist, könnten
+  beide Domänen (Wachplan-Erstellung + Live-Lagebild) künftig in einer App / einem Image vereint
+  werden (gemeinsame `users`/Session, getrennte Domänen-Tabellen). Noch nicht umgesetzt.
+- **Live-GPS** der Wachgänger aus dem Browser (Endpoint `PATCH /guards/:id/position` vorhanden).
+- **Einsatzverwaltung** (Operation-Modell) – im alten Stack vorbereitet, hier noch nicht portiert.
+- **Backend-Tests** weiter ausbauen (mehr Rollen-/Fehlerpfade).
 
 ## Verifikation (Kurzform)
-1. `docker compose up -d --build`, `GET /api/health` → ok, `/docs` erreichbar.
-2. Login Hauptwache → Karte mit Seed-Türmen + Dashboard.
-3. Wachgänger beantragt `-1` → erscheint sofort (WS) im Dashboard → genehmigen →
-   Marker/Turmfarbe ändern sich → `+1` zurück. Alle Schritte im Audit-Log sichtbar.
+1. `npm ci && npm test` → grün.
+2. Lokal: `MASTER_SECRET=… SALT=… SESSION_SECRET=… ADMIN_PASSWORD=… npm start`,
+   `GET /health` → ok, Login Hauptwache → Karte mit Seed-Türmen + Dashboard.
+3. Wachgänger anlegen → `-1` beantragen → in Hauptwache genehmigen → Status/Karte ändern sich
+   (live via WS) → `+1` zurück. Alle Schritte im Audit-Log.

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turmstatus – Wach- und Statussystem</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root{
+    --navy:#0a1929;--navy-2:#0f2438;--deep:#061320;--sea:#0d7ca8;--sea-bright:#18a8d8;
+    --foam:#7fd4e8;--coral:#ff5a4d;--coral-deep:#d8392c;--warn:#ffb347;
+    --green:#3ec98a;--green-deep:#1d8a5a;--line:rgba(127,212,232,0.14);
+    --line-strong:rgba(127,212,232,0.28);--text:#e8f4f8;--text-dim:#8ba9b8;--paper:#11293d;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:linear-gradient(180deg,var(--deep),var(--navy) 40%,var(--deep));color:var(--text);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--sea-bright)}
+  header{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  h1{font-size:1.25rem;letter-spacing:.02em;text-transform:uppercase}
+  h1 .accent{color:var(--sea-bright)}
+  .muted{color:var(--text-dim);font-size:.85rem}
+  .user-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .role-chip{font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--foam);border:1px solid var(--line-strong);border-radius:100px;padding:3px 10px}
+  button,.btn{font:inherit;cursor:pointer;border:1px solid var(--line-strong);background:rgba(24,168,216,.1);color:var(--text);border-radius:8px;padding:7px 13px;transition:all .15s}
+  button:hover,.btn:hover{border-color:var(--sea-bright);background:rgba(24,168,216,.2)}
+  button.primary{background:var(--sea);border-color:var(--sea-bright)}
+  button.danger{background:rgba(255,90,77,.14);border-color:var(--coral)}
+  button.ok{background:rgba(62,201,138,.14);border-color:var(--green)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  nav.tabs{display:flex;gap:6px;padding:10px 20px 0;flex-wrap:wrap}
+  nav.tabs button{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none}
+  nav.tabs button.active{background:var(--navy-2);border-color:var(--line-strong);color:var(--sea-bright)}
+  main{padding:16px 20px 40px}
+  .tab{display:none}
+  .tab.active{display:block}
+  .panel{background:linear-gradient(165deg,var(--navy-2),var(--paper));border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  .panel h2{font-size:1rem;text-transform:uppercase;letter-spacing:.08em;color:var(--foam);margin-bottom:12px}
+  #map{height:62vh;min-height:380px;border-radius:14px;border:1px solid var(--line);z-index:1}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:.82rem;color:var(--text-dim)}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .dot.green{background:var(--green)}.dot.yellow{background:var(--warn)}.dot.red{background:var(--coral)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .card{background:rgba(13,124,168,.08);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .card .num{font-size:1.8rem;font-weight:700;color:var(--sea-bright)}
+  .card .lbl{font-size:.78rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--text-dim);font-weight:600;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em}
+  .status-pill{font-size:.74rem;border-radius:100px;padding:2px 9px;border:1px solid var(--line-strong)}
+  .status-GREEN,.status-IN_AREA,.status-AT_TOWER{color:var(--green);border-color:var(--green)}
+  .status-YELLOW,.status-BREAK,.status-PATROL{color:var(--warn);border-color:var(--warn)}
+  .status-RED,.status-MINUS_ONE,.status-DEPLOYED,.status-OUT_OF_SERVICE{color:var(--coral);border-color:var(--coral)}
+  .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  input,select,textarea{font:inherit;background:rgba(6,19,32,.6);border:1px solid var(--line-strong);color:var(--text);border-radius:8px;padding:8px 10px;width:100%}
+  label{display:block;font-size:.8rem;color:var(--text-dim);margin:10px 0 4px}
+  .modal{display:none;position:fixed;inset:0;background:rgba(3,10,18,.7);align-items:center;justify-content:center;z-index:1000;padding:16px}
+  .modal-box{background:linear-gradient(165deg,var(--navy-2),var(--paper));border:1px solid var(--line-strong);border-radius:14px;padding:22px;width:100%;max-width:420px}
+  .modal-box h3{margin-bottom:12px;color:var(--foam)}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+  .err{color:var(--coral);font-size:.84rem;min-height:1.2em;margin-top:6px}
+  .ok-msg{color:var(--green);font-size:.84rem;min-height:1.2em;margin-top:6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--navy-2);border:1px solid var(--sea-bright);color:var(--text);padding:11px 18px;border-radius:10px;z-index:2000;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:600px){.grid2{grid-template-columns:1fr}}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<!-- ── Login / Setup / Register Modal ── -->
+<div id="login-modal" class="modal">
+  <div class="modal-box">
+    <div id="login-view">
+      <h3>🛟 Turmstatus – Anmeldung</h3>
+      <form id="login-form">
+        <label for="login-username">Benutzername</label>
+        <input id="login-username" autocomplete="username" required>
+        <label for="login-password">Passwort</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="login-remember" style="width:auto">Angemeldet bleiben (30 Tage)</label>
+        <div class="err" id="login-error"></div>
+        <div class="modal-actions"><button class="primary" type="submit">Anmelden</button></div>
+        <div class="muted" id="register-link-text" style="margin-top:10px"></div>
+      </form>
+    </div>
+    <div id="setup-view" style="display:none">
+      <h3>Erst-Einrichtung (Hauptwache)</h3>
+      <p class="muted">Lege das erste Hauptwache-Konto an.</p>
+      <form id="setup-form">
+        <label for="setup-username">Benutzername</label>
+        <input id="setup-username" required>
+        <label for="setup-password">Passwort (min. 10 Zeichen)</label>
+        <input id="setup-password" type="password" required>
+        <label for="setup-password2">Passwort wiederholen</label>
+        <input id="setup-password2" type="password" required>
+        <div class="err" id="setup-error"></div>
+        <div class="modal-actions"><button class="primary" type="submit">Konto anlegen</button></div>
+      </form>
+    </div>
+    <div id="register-view" style="display:none">
+      <h3>Registrieren</h3>
+      <form id="register-form">
+        <label for="register-username">Benutzername</label>
+        <input id="register-username" required>
+        <label for="register-password">Passwort (min. 10 Zeichen)</label>
+        <input id="register-password" type="password" required>
+        <label for="register-password2">Passwort wiederholen</label>
+        <input id="register-password2" type="password" required>
+        <div id="register-code-field" style="display:none">
+          <label for="register-code">Registrierungs-Code</label>
+          <input id="register-code">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="register-privacy" style="width:auto">Datenschutzhinweis akzeptieren</label>
+        <div class="err" id="register-error"></div>
+        <div class="modal-actions">
+          <button type="button" id="back-to-login-btn">Zurück</button>
+          <button class="primary" type="submit">Registrieren</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app" class="hidden">
+  <header>
+    <div>
+      <h1>Turm<span class="accent">status</span></h1>
+      <div class="muted">Digitales Wach- und Statussystem · Wasserrettung</div>
+    </div>
+    <div class="user-box" id="user-info-header">
+      <span class="role-chip" id="user-info-role"></span>
+      <span id="user-info-username" class="muted"></span>
+      <button id="btn-change-password">Passwort</button>
+      <button id="btn-admin-panel" style="display:none">Admin-Panel</button>
+      <button id="btn-logout" class="danger">Abmelden</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="map" class="active">Karte</button>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="requests">Anfragen</button>
+    <button data-tab="admin" id="tab-btn-admin" style="display:none">Verwaltung</button>
+  </nav>
+
+  <main>
+    <!-- Karte -->
+    <section id="tab-map" class="tab active">
+      <div class="panel">
+        <h2>Einsatzkarte</h2>
+        <div id="map"></div>
+        <div class="legend">
+          <span><span class="dot green"></span>Turm besetzt</span>
+          <span><span class="dot yellow"></span>reduziert</span>
+          <span><span class="dot red"></span>kritisch</span>
+          <span>🚩 Wachgänger · ⛵ Boot</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab">
+      <div class="panel">
+        <h2>Lageübersicht</h2>
+        <div class="cards" id="summary-cards"></div>
+      </div>
+      <div class="panel">
+        <h2>Türme</h2>
+        <div id="tower-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Wachgänger</h2>
+        <div id="guard-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Boote</h2>
+        <div id="boat-table"></div>
+      </div>
+    </section>
+
+    <!-- Anfragen -->
+    <section id="tab-requests" class="tab">
+      <div class="panel">
+        <h2>Offene -1 Anfragen</h2>
+        <div id="pending-requests"></div>
+      </div>
+      <div class="panel">
+        <h2>Verlauf</h2>
+        <div id="request-history"></div>
+      </div>
+    </section>
+
+    <!-- Verwaltung (Admin) -->
+    <section id="tab-admin" class="tab">
+      <div class="panel">
+        <h2>Benutzerverwaltung <button id="btn-new-user" class="primary" style="float:right">+ Benutzer</button></h2>
+        <div id="user-table"></div>
+      </div>
+      <div class="panel">
+        <h2>Audit-Protokoll</h2>
+        <div id="audit-table"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ── -1 Anfrage Modal ── -->
+<div id="minus-one-modal" class="modal">
+  <div class="modal-box">
+    <h3>-1 beantragen</h3>
+    <input type="hidden" id="mo-guard-id">
+    <p class="muted" id="mo-guard-name"></p>
+    <label for="mo-reason">Grund</label>
+    <select id="mo-reason"></select>
+    <label for="mo-note">Notiz (optional)</label>
+    <textarea id="mo-note" rows="2"></textarea>
+    <div class="err" id="mo-error"></div>
+    <div class="modal-actions">
+      <button id="mo-cancel">Abbrechen</button>
+      <button class="primary" id="mo-submit">Beantragen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Reject Modal ── -->
+<div id="reject-modal" class="modal">
+  <div class="modal-box">
+    <h3>Anfrage ablehnen</h3>
+    <input type="hidden" id="reject-request-id">
+    <label for="reject-reason">Begründung (optional)</label>
+    <textarea id="reject-reason" rows="2"></textarea>
+    <div class="modal-actions">
+      <button id="reject-cancel">Abbrechen</button>
+      <button class="danger" id="reject-submit">Ablehnen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Passwort ändern Modal ── -->
+<div id="pw-modal" class="modal">
+  <div class="modal-box">
+    <h3>Passwort ändern</h3>
+    <label for="pw-current">Aktuelles Passwort</label>
+    <input id="pw-current" type="password">
+    <label for="pw-new">Neues Passwort (min. 10 Zeichen)</label>
+    <input id="pw-new" type="password">
+    <label for="pw-new2">Neues Passwort wiederholen</label>
+    <input id="pw-new2" type="password">
+    <div class="err" id="pw-modal-msg"></div>
+    <div class="modal-actions">
+      <button id="pw-modal-close-btn">Abbrechen</button>
+      <button class="primary" id="pw-modal-confirm">Ändern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Benutzer-Modal (Admin) ── -->
+<div id="user-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="user-modal-title">Benutzer anlegen</h3>
+    <input type="hidden" id="user-modal-id">
+    <label for="user-modal-username">Benutzername</label>
+    <input id="user-modal-username">
+    <label for="user-modal-fullname">Voller Name</label>
+    <input id="user-modal-fullname">
+    <label for="user-modal-role">Rolle</label>
+    <select id="user-modal-role">
+      <option value="WACHGAENGER">Wachgänger</option>
+      <option value="TURMFUEHRER">Turmführer</option>
+      <option value="HAUPTWACHE">Hauptwache</option>
+    </select>
+    <label for="user-modal-tower">Turm (optional)</label>
+    <select id="user-modal-tower"></select>
+    <div id="user-modal-pw-field">
+      <label for="user-modal-password">Passwort (min. 10 Zeichen)</label>
+      <input id="user-modal-password" type="password">
+    </div>
+    <div class="err" id="user-modal-error"></div>
+    <div class="modal-actions">
+      <button id="user-modal-cancel">Abbrechen</button>
+      <button class="primary" id="user-modal-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="js/state.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/map.js"></script>
+<script src="js/views.js"></script>
+<script src="js/ws.js"></script>
+<script src="js/init.js"></script>
+</body>
+</html>

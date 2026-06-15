@@ -1,8 +1,8 @@
-name: Build & Push Docker Images
+name: Build & Push Docker Image
 
-# Baut Backend- und Frontend-Image als Multi-Arch (amd64 + arm64) und
-# veröffentlicht sie in der GitHub Container Registry (GHCR). Damit lädt
-# die NAS (x86 oder ARM) die fertigen Images, statt selbst zu bauen.
+# Baut EIN Multi-Arch-Image (amd64 + arm64) und veröffentlicht es in der
+# GitHub Container Registry (GHCR). Die NAS lädt das fertige Image, statt
+# selbst zu bauen. Ergebnis: ghcr.io/<owner>/turmstatus-app:latest
 
 on:
   push:
@@ -19,21 +19,14 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - name: backend
-            context: ./backend
-          - name: frontend
-            context: ./frontend
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Repository-Owner kleingeschrieben
-        id: vars
-        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - name: Repository-Name kleingeschrieben
+        id: image
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: QEMU (für arm64-Build)
         uses: docker/setup-qemu-action@v3
@@ -52,17 +45,17 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.vars.outputs.owner }}/turmstatus-${{ matrix.name }}
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=sha
 
-      - name: Build & Push (${{ matrix.name }})
+      - name: Build & Push
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.context }}
+          context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
