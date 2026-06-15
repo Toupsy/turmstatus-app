@@ -2,9 +2,13 @@
 # Turmstatus – Docker Compose
 #
 # Vorgefertigtes Multi-Arch-Image aus GHCR (die NAS baut nicht selbst).
-# Secrets stehen NICHT hier, sondern in einer .env neben docker-compose.yml
-# (gitignored) bzw. als Portainer-Stack-Environment-Variablen.
-#   cp .env.example .env  →  Werte eintragen  →  docker compose up -d
+# Läuft OHNE .env: alle Variablen haben hier sinnvolle Defaults.
+#   docker compose up -d
+#
+# ⚠ Für den Produktivbetrieb die mit "ÄNDERN" markierten Secrets
+#   überschreiben – entweder als Shell-/Portainer-Environment-Variable
+#   oder direkt unten im Default eintragen:
+#     MASTER_SECRET=... SESSION_SECRET=... ADMIN_PASSWORD=... docker compose up -d
 #
 # Lokal selbst bauen: docker compose -f docker-compose.build.yml up -d --build
 # ============================================================
@@ -12,7 +16,19 @@
 x-turmstatus-base: &turmstatus-base
   image: ghcr.io/toupsy/turmstatus-app:${IMAGE_TAG:-latest}
   restart: unless-stopped
-  env_file: .env
+  environment:
+    NODE_ENV: ${NODE_ENV:-production}
+    # Ohne TLS-Reverse-Proxy false lassen, sonst kommt der Session-Cookie nicht zurück.
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    # ── Secrets (für Produktion ÄNDERN) ──────────────────────
+    MASTER_SECRET: ${MASTER_SECRET:-aendern-32-zeichen-langes-master-secret}
+    SALT: ${SALT:-aendern-16-zeichen-salt}
+    SESSION_SECRET: ${SESSION_SECRET:-aendern-session-secret-16}
+    # ── Erst-Admin / Hauptwache ──────────────────────────────
+    ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}  # ÄNDERN
+    # ── Selbstregistrierung: disabled | open | code ──────────
+    REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
   volumes:
     - turmstatus-data:/app/data
   networks:
@@ -38,6 +54,14 @@ services:
     container_name: dlrg-turmstatus-admin
     command: node server/admin-server.js
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MASTER_SECRET: ${MASTER_SECRET:-aendern-32-zeichen-langes-master-secret}
+      SALT: ${SALT:-aendern-16-zeichen-salt}
+      SESSION_SECRET: ${SESSION_SECRET:-aendern-session-secret-16}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
       ADMIN_PORT: "3003"
     ports:
       - "${ADMIN_HTTP_PORT:-3003}:3003"
