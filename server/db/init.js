@@ -181,6 +181,10 @@ function initDatabase() {
           db.run("ALTER TABLE users ADD COLUMN tower_id INTEGER", () => {});
           db.run("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1", () => {});
 
+          // Rollen-Umbenennung TURMFUEHRER → WACHFUEHRER (Bestands-DBs). Idempotent:
+          // greift nur, solange noch alte Rollenwerte existieren.
+          db.run("UPDATE users SET role = 'WACHFUEHRER' WHERE role = 'TURMFUEHRER'", () => {});
+
           // Domain-Seed (Türme/Boote) + Admin-Seed nacheinander
           seedDomain(db, () => seedAdmin(db, (seedErr) => {
             db.close((closeErr) => {

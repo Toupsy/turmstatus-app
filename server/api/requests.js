@@ -57,8 +57,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/requests/minus-one – -1 beantragen [WACHGAENGER | TURMFUEHRER]
-router.post('/minus-one', requireRole('WACHGAENGER', 'TURMFUEHRER'), express.json(), async (req, res) => {
+// POST /api/requests/minus-one – -1 beantragen [WACHGAENGER | BOOTSFUEHRER | WACHFUEHRER]
+router.post('/minus-one', requireRole('WACHGAENGER', 'BOOTSFUEHRER', 'WACHFUEHRER'), express.json(), async (req, res) => {
   try {
     const guardId = parsePositiveInt(req.body.guardId);
     const { reason, note } = req.body;

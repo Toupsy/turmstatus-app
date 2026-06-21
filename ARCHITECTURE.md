@@ -32,27 +32,38 @@ GET    /api/guards                  POST/DELETE
 PATCH  /api/guards/:id/status       PATCH /api/guards/:id/position
 GET    /api/boats                   POST/PATCH/DELETE
 
-POST   /api/requests/minus-one      [WACHGAENGER|TURMFUEHRER]
+POST   /api/requests/minus-one      [WACHGAENGER|BOOTSFUEHRER|WACHFUEHRER]
 POST   /api/requests/:id/approve    POST /api/requests/:id/reject   [HAUPTWACHE]
 POST   /api/requests/:id/return     GET  /api/requests?status=PENDING
 
+GET    /api/control-trips           POST [BOOTSFUEHRER]
+POST   /api/control-trips/:id/approve  POST /api/control-trips/:id/reject  [HAUPTWACHE|WACHFUEHRER(eigene Wache)]
+
 GET    /api/dashboard/summary
-GET    /api/admin/users  POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [Admin]
-GET    /api/admin/audit-log                                                     [Admin]
+GET    /api/admin/users  POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [App-Admin]
+GET    /api/admin/towers  GET /api/admin/audit-log                              [App-Admin]
+GET    /api/team/members POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [Wachführer, nur eigene Wache]
 
 GET    /api/config   GET /api/version   GET /health
 WS     /api/ws                       (Broadcast aller Lageänderungen)
 ```
 
 ## 4. Rollen & Rechte (serverseitig, `server/middleware.js`)
-| Aktion | Hauptwache | Turmführer | Wachgänger |
-|---|:---:|:---:|:---:|
-| Lagebild sehen (Türme/Boote/Wachgänger) | ✅ | ✅ | ✅ |
-| `-1` beantragen | ✅ | ✅ | ✅ |
-| `-1` genehmigen/ablehnen | ✅ | – | – |
-| `+1` / Rückkehr melden | ✅ | ✅ | ✅ |
-| Turm/Boot bearbeiten | ✅ | eigener Turm | – |
-| Benutzerverwaltung / Audit | ✅ | – | – |
+App-Admin = `is_admin` (technischer Administrator). „Hauptwache" als externe Instanz ist noch nicht
+getrennt modelliert (aktuell = `role=HAUPTWACHE` + `is_admin`).
+
+| Aktion | App-Admin (Hauptwache) | Wachführer | Wachgänger | Bootsführer |
+|---|:---:|:---:|:---:|:---:|
+| Lagebild sehen (Türme/Boote/Wachgänger) | ✅ | ✅ | ✅ | ✅ |
+| `-1` beantragen | ✅ | ✅ | ✅ | ✅ |
+| `-1` genehmigen/ablehnen | ✅ | – | – | – |
+| `+1` / Rückkehr melden | ✅ | ✅ | ✅ | ✅ |
+| Kontrollfahrt beantragen | – | – | – | ✅ |
+| Kontrollfahrt genehmigen/ablehnen | ✅ | eigene Wache | – | – |
+| Turm/Boot bearbeiten | ✅ | eigene Wache | – | – |
+| Wachführer anlegen (+ Wache zuweisen) | ✅ | – | – | – |
+| Wachgänger/Bootsführer der eigenen Wache anlegen | ✅ | ✅ (nur eigene Wache) | – | – |
+| Audit-Log | ✅ | – | – | – |
 
 ## 5. Echtzeit & Robustheit
 - Jede Mutation in den `api/*`-Routen ruft `broadcast('<typ>-updated')` → alle verbundenen

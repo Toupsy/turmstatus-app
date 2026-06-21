@@ -125,7 +125,8 @@ function renderUserHeader() {
   document.getElementById('user-info-username').textContent = currentUser.fullName || currentUser.username;
   document.getElementById('user-info-role').textContent = labelOf('roleLabels', currentUser.role);
   document.getElementById('btn-admin-panel').style.display = currentUser.isAdmin ? '' : 'none';
-  document.getElementById('tab-btn-admin').style.display = currentUser.isAdmin ? '' : 'none';
+  // Verwaltung: App-Admin (volle Benutzerverwaltung) ODER Wachführer (nur eigene Wache).
+  document.getElementById('tab-btn-admin').style.display = (canManage() || canManageTeam()) ? '' : 'none';
 }
 
 async function logout() {

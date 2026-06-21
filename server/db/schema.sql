@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   full_name TEXT,
-  role TEXT NOT NULL DEFAULT 'WACHGAENGER',   -- HAUPTWACHE | TURMFUEHRER | WACHGAENGER
-  tower_id INTEGER,                            -- Zuordnung Turmführer/Wachgänger (optional)
-  is_admin BOOLEAN DEFAULT 0,                  -- 1 = Admin-Panel-Zugriff (i.d.R. Hauptwache)
+  role TEXT NOT NULL DEFAULT 'WACHGAENGER',   -- HAUPTWACHE | WACHFUEHRER | WACHGAENGER | BOOTSFUEHRER
+  tower_id INTEGER,                            -- Zuordnung Wachführer/Wachgänger/Bootsführer zur Wache (optional)
+  is_admin BOOLEAN DEFAULT 0,                  -- 1 = Admin-Panel-Zugriff (App-Admin)
   is_active BOOLEAN DEFAULT 1,
   last_login DATETIME,                         -- Letzter erfolgreicher Login (UTC), NULL = noch nie
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -75,6 +75,24 @@ CREATE TABLE IF NOT EXISTS minus_one_requests (
   FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+-- Kontrollfahrt-Anfragen (nur Bootsführer beantragen; Genehmigen/Ablehnen durch
+-- Hauptwache/Wachführer). Bewusst noch OHNE Boot-Statuslogik – erst der Workflow-
+-- Rahmen (beantragen → genehmigen/ablehnen), die Folgeaktionen kommen später.
+CREATE TABLE IF NOT EXISTS control_trip_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  boat_id INTEGER NOT NULL,
+  requested_by INTEGER,                        -- users.id (Bootsführer)
+  note TEXT,                                   -- Freitext (z. B. Anlass der Kontrollfahrt)
+  status TEXT NOT NULL DEFAULT 'PENDING',      -- PENDING | APPROVED | REJECTED
+  rejection_reason TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  decided_at DATETIME,
+  decided_by INTEGER,                          -- users.id
+  FOREIGN KEY (boat_id) REFERENCES boats(id) ON DELETE CASCADE,
+  FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
 -- Audit-Log (DSGVO Art. 5 Abs. 1 f – Accountability, Art. 32 – Sicherheit)
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +111,8 @@ CREATE INDEX IF NOT EXISTS idx_guards_tower ON guards(tower_id);
 CREATE INDEX IF NOT EXISTS idx_boats_tower ON boats(tower_id);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON minus_one_requests(status);
 CREATE INDEX IF NOT EXISTS idx_requests_guard ON minus_one_requests(guard_id);
+CREATE INDEX IF NOT EXISTS idx_control_trips_status ON control_trip_requests(status);
+CREATE INDEX IF NOT EXISTS idx_control_trips_boat ON control_trip_requests(boat_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);

@@ -9,7 +9,24 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
-## Zuletzt (DB-/Port-Härtung vom Wachplan-Generator übernommen)
+## Zuletzt (Rollen-Hierarchie, Wachführer-Personalverwaltung, Bootsführer/Kontrollfahrten, Cookie-Fix)
+- **Bugfix „Not authenticated"** beim Benutzer-Anlegen im Admin-Panel: Session-Cookie-`secure`
+  war in production immer `true` (ODER-Logik) und ignorierte `COOKIE_SECURE=false` → über HTTP
+  verwarf der Browser das Cookie. Jetzt hat explizites `COOKIE_SECURE` Vorrang (`db/session.js`).
+- **Rollen:** `TURMFUEHRER` → **`WACHFUEHRER`** umbenannt (Code + idempotente DB-Migration); neue
+  Rolle **`BOOTSFUEHRER`**.
+- **Konten-Hierarchie:** App-Admin (`is_admin`) legt über `/api/admin/*` Wachführer an (+ Wache);
+  Wachführer legen über neuen `/api/team/*` ihr eigenes Personal an – strikt auf die eigene
+  `tower_id` gescoped. „Verwaltung"-Tab jetzt auch für Wachführer (Team-Scope via `userApiBase()`).
+- **Kontrollfahrten:** neuer Workflow-Rahmen `api/control-trips.js` + Tabelle `control_trip_requests`
+  (Bootsführer beantragt → HW/Wachführer genehmigt/lehnt ab; **noch ohne** Boot-Statuslogik).
+- **Verifikation:** Unit-Tests grün; voller Rollen-/Kontrollfahrt-Flow manuell per curl geprüft
+  (Admin→Wachführer→Team-Anlage, Scoping-403s, Bootsführer-Antrag→Genehmigung). Hinweis: der
+  Integrationstest `api.test.js` lässt sich in dieser Sandbox nicht booten (Port-Bindung wird
+  abgeschossen) – Logik unverändert HAUPTWACHE-kompatibel.
+- **Offen:** „Hauptwache" als von der App-Admin-Rolle getrennte externe Instanz; Kontrollfahrt-Folgelogik.
+
+## Davor (DB-/Port-Härtung vom Wachplan-Generator übernommen)
 Die bewährte SQLite-/Port-Logik des Schwester-Projekts ist jetzt auch hier umgesetzt:
 - **EIN Prozess, beide Ports:** Admin-Panel (3003) wird per `ADMIN_PORT` in den Hauptprozess
   (3002) eingebettet (`createAdminApp({sessionMiddleware})`); beide `docker-compose*.yml` nur

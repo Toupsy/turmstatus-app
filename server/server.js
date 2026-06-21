@@ -21,8 +21,10 @@ const towersApi = require('./api/towers');
 const guardsApi = require('./api/guards');
 const boatsApi = require('./api/boats');
 const requestsApi = require('./api/requests');
+const controlTripsApi = require('./api/control-trips');
 const dashboardApi = require('./api/dashboard');
 const adminApi = require('./api/admin');
+const teamApi = require('./api/team');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -128,8 +130,10 @@ async function start() {
     app.use('/api/guards', guardsApi);
     app.use('/api/boats', boatsApi);
     app.use('/api/requests', requestsApi);
+    app.use('/api/control-trips', controlTripsApi);
     app.use('/api/dashboard', dashboardApi);
     app.use('/api/admin', adminApi);
+    app.use('/api/team', teamApi);
 
     // Version (public)
     app.get('/api/version', async (req, res) => {

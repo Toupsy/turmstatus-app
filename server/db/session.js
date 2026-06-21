@@ -101,7 +101,15 @@ function createSessionMiddleware({ resave = true, saveUninitialized = true } = {
     resave,
     saveUninitialized,
     cookie: {
-      secure: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
+      // Explizites COOKIE_SECURE hat IMMER Vorrang (true/false), sonst Fallback auf
+      // NODE_ENV=production. Früher war dies ein ODER: in production wurde `secure`
+      // unabhängig von COOKIE_SECURE erzwungen → bei HTTP-only-Betrieb (ohne TLS-
+      // Reverse-Proxy) verwarf der Browser das `Secure`-Cookie still → jeder
+      // authentifizierte Request kam ohne Session an („Not authenticated"), obwohl
+      // .env(.example) COOKIE_SECURE=false als Schalter dafür dokumentiert.
+      secure: process.env.COOKIE_SECURE !== undefined
+        ? process.env.COOKIE_SECURE === 'true'
+        : process.env.NODE_ENV === 'production',
       httpOnly: true,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days

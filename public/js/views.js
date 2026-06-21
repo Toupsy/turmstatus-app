@@ -24,18 +24,30 @@ async function refreshRequests() {
   requests = (await apiGet('/api/requests')).requests;
   renderRequests();
 }
+async function refreshControlTrips() {
+  controlTrips = (await apiGet('/api/control-trips')).controlTrips;
+  renderControlTrips();
+}
 async function refreshDashboard() {
   const s = await apiGet('/api/dashboard/summary');
   renderSummary(s);
 }
 async function refreshAdmin() {
-  if (!canManage()) return;
-  users = (await apiGet('/api/admin/users')).users;
-  renderUsers();
-  try {
-    const a = await apiGet('/api/admin/audit-log?limit=200');
-    renderAudit(a.entries);
-  } catch (e) { /* ignore */ }
+  // App-Admin: volle Benutzerliste + Audit-Log. Wachführer: nur eigenes Wachpersonal.
+  if (canManage()) {
+    users = (await apiGet('/api/admin/users')).users;
+    renderUsers();
+    try {
+      const a = await apiGet('/api/admin/audit-log?limit=200');
+      renderAudit(a.entries);
+    } catch (e) { /* ignore */ }
+  } else if (canManageTeam()) {
+    users = (await apiGet('/api/team/members')).users;
+    renderUsers();
+    // Audit-Log ist dem App-Admin vorbehalten → Panel für Wachführer ausblenden.
+    const auditPanel = document.getElementById('audit-table');
+    if (auditPanel && auditPanel.closest('.panel')) auditPanel.closest('.panel').style.display = 'none';
+  }
 }
 
 async function refreshAll() {
@@ -44,9 +56,10 @@ async function refreshAll() {
     refreshGuards().catch(e => console.error(e)),
     refreshBoats().catch(e => console.error(e)),
     refreshRequests().catch(e => console.error(e)),
+    refreshControlTrips().catch(e => console.error(e)),
     refreshDashboard().catch(e => console.error(e))
   ]);
-  if (canManage()) await refreshAdmin().catch(e => console.error(e));
+  if (canManage() || canManageTeam()) await refreshAdmin().catch(e => console.error(e));
 }
 
 // ── Dashboard ────────────────────────────────────────────────
@@ -109,7 +122,7 @@ function approvedRequestForGuard(guardId) {
 // ── Boote ────────────────────────────────────────────────────
 function renderBoats() {
   if (!boats.length) { document.getElementById('boat-table').innerHTML = '<p class="muted">Keine Boote.</p>'; return; }
-  const canEdit = isHauptwache() || isTurmfuehrer();
+  const canEdit = isHauptwache() || isWachfuehrer();
   const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
   const rows = boats.map(b => {
     const statusCell = canEdit
@@ -230,6 +243,79 @@ async function returnRequest(id) {
   catch (err) { showToast(err.message); }
 }
 
+// ── Kontrollfahrten (Bootsführer beantragen, Hauptwache/Wachführer entscheiden) ──
+function renderControlTrips() {
+  // „+ Kontrollfahrt"-Button nur für Bootsführer einblenden.
+  const btn = document.getElementById('btn-new-control-trip');
+  if (btn) btn.style.display = isBootsfuehrer() ? '' : 'none';
+
+  const listEl = document.getElementById('control-trip-list');
+  if (!listEl) return;
+  if (!controlTrips.length) {
+    listEl.innerHTML = '<p class="muted">Keine Kontrollfahrt-Anfragen.</p>';
+    return;
+  }
+  const canDecide = isHauptwache() || isWachfuehrer();
+  const rows = controlTrips.map(c => {
+    let actions = '';
+    if (c.status === 'PENDING' && canDecide) {
+      actions = `<button class="ok" onclick="approveControlTrip(${c.id})">Genehmigen</button>
+                 <button class="danger" onclick="openRejectControlTrip(${c.id})">Ablehnen</button>`;
+    } else if (c.status === 'PENDING') {
+      actions = '<span class="muted">wartet auf Genehmigung</span>';
+    }
+    return `<tr>
+      <td>${escapeHtml(c.boatName)}${c.boatCallSign ? ' (' + escapeHtml(c.boatCallSign) + ')' : ''}</td>
+      <td>${escapeHtml(c.towerName || '–')}</td>
+      <td>${escapeHtml(c.note || '–')}</td>
+      <td>${statusPill('requestStatus', c.status)}</td>
+      <td>${escapeHtml(c.requestedBy || '–')}</td>
+      <td>${fmtTime(c.decidedAt || c.createdAt)}</td>
+      <td class="row-actions">${actions}</td>
+    </tr>`;
+  }).join('');
+  listEl.innerHTML =
+    `<table><thead><tr><th>Boot</th><th>Turm</th><th>Notiz</th><th>Status</th><th>Beantragt von</th><th>Zeit</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function openControlTrip() {
+  const sel = document.getElementById('ct-boat-id');
+  sel.innerHTML = boats.map(b =>
+    `<option value="${b.id}">${escapeHtml(b.name)}${b.callSign ? ' (' + escapeHtml(b.callSign) + ')' : ''}</option>`).join('');
+  document.getElementById('ct-note').value = '';
+  document.getElementById('ct-error').textContent = '';
+  openModal('control-trip-modal');
+}
+async function submitControlTrip() {
+  const boatId = Number(document.getElementById('ct-boat-id').value);
+  const note = document.getElementById('ct-note').value;
+  if (!boatId) { document.getElementById('ct-error').textContent = 'Bitte ein Boot wählen.'; return; }
+  try {
+    await apiPost('/api/control-trips', { boatId, note });
+    closeModal('control-trip-modal');
+    showToast('Kontrollfahrt beantragt');
+  } catch (err) {
+    document.getElementById('ct-error').textContent = err.message;
+  }
+}
+async function approveControlTrip(id) {
+  try { await apiPost('/api/control-trips/' + id + '/approve'); showToast('Genehmigt'); }
+  catch (err) { showToast(err.message); }
+}
+function openRejectControlTrip(id) {
+  document.getElementById('ct-reject-id').value = id;
+  document.getElementById('ct-reject-reason').value = '';
+  openModal('ct-reject-modal');
+}
+async function submitRejectControlTrip() {
+  const id = document.getElementById('ct-reject-id').value;
+  try {
+    await apiPost('/api/control-trips/' + id + '/reject', { rejectionReason: document.getElementById('ct-reject-reason').value });
+    closeModal('ct-reject-modal');
+    showToast('Abgelehnt');
+  } catch (err) { showToast(err.message); }
+}
+
 // ── Verwaltung (Admin) ───────────────────────────────────────
 function renderUsers() {
   if (!users.length) { document.getElementById('user-table').innerHTML = '<p class="muted">Keine Benutzer.</p>'; return; }
@@ -250,6 +336,25 @@ function renderUsers() {
     `<table><thead><tr><th>Benutzer</th><th>Name</th><th>Rolle</th><th>Turm</th><th>Aktiv</th><th>Letzter Login</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// Basis-Endpunkt der Benutzerverwaltung je nach Rolle:
+// App-Admin → /api/admin/users (alle), Wachführer → /api/team/members (eigene Wache).
+function userApiBase() { return canManage() ? '/api/admin/users' : '/api/team/members'; }
+
+// Rollen, die im Modal zur Auswahl stehen. Admin legt v. a. Wachführer an; ein
+// Wachführer darf nur Wachgänger/Bootsführer seiner Wache anlegen.
+function userModalRoles() {
+  return canManage()
+    ? ['WACHFUEHRER', 'WACHGAENGER', 'BOOTSFUEHRER', 'HAUPTWACHE']
+    : ['WACHGAENGER', 'BOOTSFUEHRER'];
+}
+
+function fillRoleSelect(selectedRole) {
+  const roles = userModalRoles();
+  const sel = document.getElementById('user-modal-role');
+  sel.innerHTML = roles.map(r =>
+    `<option value="${r}" ${r === selectedRole ? 'selected' : ''}>${escapeHtml(labelOf('roleLabels', r))}</option>`).join('');
+}
+
 function fillTowerSelect(selectedId) {
   const sel = document.getElementById('user-modal-tower');
   sel.innerHTML = '<option value="">– kein Turm –</option>' +
@@ -258,14 +363,20 @@ function fillTowerSelect(selectedId) {
 
 function openUserModal(user) {
   document.getElementById('user-modal-error').textContent = '';
+  // Turmwahl nur für den App-Admin; beim Wachführer ist die Wache fix (eigener Turm).
+  const showTower = canManage();
+  document.getElementById('user-modal-tower').style.display = showTower ? '' : 'none';
+  const towerLabel = document.querySelector('label[for="user-modal-tower"]');
+  if (towerLabel) towerLabel.style.display = showTower ? '' : 'none';
   fillTowerSelect(user ? user.towerId : null);
+
   if (user && user.id) {
     document.getElementById('user-modal-title').textContent = 'Benutzer bearbeiten';
     document.getElementById('user-modal-id').value = user.id;
     document.getElementById('user-modal-username').value = user.username;
     document.getElementById('user-modal-username').disabled = true;
     document.getElementById('user-modal-fullname').value = user.fullName || '';
-    document.getElementById('user-modal-role').value = user.role;
+    fillRoleSelect(user.role);
     document.getElementById('user-modal-pw-field').style.display = 'none';
   } else {
     document.getElementById('user-modal-title').textContent = 'Benutzer anlegen';
@@ -273,7 +384,7 @@ function openUserModal(user) {
     document.getElementById('user-modal-username').value = '';
     document.getElementById('user-modal-username').disabled = false;
     document.getElementById('user-modal-fullname').value = '';
-    document.getElementById('user-modal-role').value = 'WACHGAENGER';
+    fillRoleSelect(canManage() ? 'WACHFUEHRER' : 'WACHGAENGER');
     document.getElementById('user-modal-password').value = '';
     document.getElementById('user-modal-pw-field').style.display = 'block';
   }
@@ -283,19 +394,22 @@ function openUserModal(user) {
 async function saveUser() {
   const id = document.getElementById('user-modal-id').value;
   const errEl = document.getElementById('user-modal-error');
-  const towerVal = document.getElementById('user-modal-tower').value;
   const payload = {
     fullName: document.getElementById('user-modal-fullname').value,
-    role: document.getElementById('user-modal-role').value,
-    towerId: towerVal ? Number(towerVal) : null
+    role: document.getElementById('user-modal-role').value
   };
+  // Turm nur der App-Admin setzen; beim Wachführer erzwingt der Server die eigene Wache.
+  if (canManage()) {
+    const towerVal = document.getElementById('user-modal-tower').value;
+    payload.towerId = towerVal ? Number(towerVal) : null;
+  }
   try {
     if (id) {
-      await apiPatch('/api/admin/users/' + id, payload);
+      await apiPatch(userApiBase() + '/' + id, payload);
     } else {
       payload.username = document.getElementById('user-modal-username').value;
       payload.password = document.getElementById('user-modal-password').value;
-      await apiPost('/api/admin/users', payload);
+      await apiPost(userApiBase(), payload);
     }
     closeModal('user-modal');
     showToast('Gespeichert');
@@ -307,7 +421,7 @@ async function saveUser() {
 
 async function deleteUser(id) {
   if (!confirm('Benutzer wirklich löschen?')) return;
-  try { await apiDelete('/api/admin/users/' + id); showToast('Gelöscht'); refreshAdmin(); }
+  try { await apiDelete(userApiBase() + '/' + id); showToast('Gelöscht'); refreshAdmin(); }
   catch (err) { showToast(err.message); }
 }
 

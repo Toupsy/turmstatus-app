@@ -2,6 +2,33 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Rollen-Hierarchie, Wachführer-Personalverwaltung, Bootsführer + Kontrollfahrten; Cookie-Fix
+
+**Bugfix „Not authenticated" beim Benutzer-Anlegen im Admin-Panel:** In `db/session.js`
+wurde das Session-Cookie-`secure`-Flag per ODER gesetzt (`COOKIE_SECURE==='true' || NODE_ENV==='production'`).
+In production (Default in `.env`) war `secure` damit **immer** true – auch bei `COOKIE_SECURE=false`.
+Ohne TLS (HTTP-only) verwarf der Browser das `Secure`-Cookie still → jeder authentifizierte Request
+kam ohne Session an („Not authenticated"). Jetzt hat ein **explizit gesetztes `COOKIE_SECURE` Vorrang**;
+nur ohne Angabe greift der `NODE_ENV=production`-Default.
+
+**Rollenmodell & Konten-Hierarchie (erste, grobe Version):**
+- Rolle `TURMFUEHRER` → **`WACHFUEHRER`** umbenannt (Code + idempotente DB-Migration in `db/init.js`).
+- Neue Rolle **`BOOTSFUEHRER`** (wie Wachgänger, darf zusätzlich Kontrollfahrten beantragen).
+- **App-Admin** (`is_admin`) legt über das Admin-Panel / `/api/admin/*` v. a. **Wachführer** an und
+  weist die Wache (Turm) zu; Admin-Panel hat dafür jetzt ein Turm-Feld (`GET /api/admin/towers`).
+- **Wachführer** verwalten über den neuen Router `api/team.js` (`/api/team/members`) ihr **eigenes**
+  Wachpersonal (Wachgänger/Bootsführer) – `tower_id` serverseitig auf die eigene Wache erzwungen,
+  damit kein Wachführer in eine fremde Wache eingreift. Frontend: „Verwaltung"-Tab ist jetzt auch für
+  Wachführer sichtbar und schaltet (über `userApiBase()`) zwischen Admin- und Team-Endpunkt.
+
+**Kontrollfahrten (`api/control-trips.js`, `control_trip_requests`):** Bootsführer beantragen eine
+Kontrollfahrt für ein Boot; Hauptwache/Wachführer (eigene Wache) genehmigen oder lehnen ab.
+Bewusst **noch ohne Boot-Statuslogik** – nur der Workflow-Rahmen, mit Audit + Live-Broadcast
+(`control-trips-updated`). Neuer „Kontrollfahrten"-Bereich im Anfragen-Tab.
+
+**Noch offen:** „Hauptwache" als von der App-Admin-Rolle getrennte, externe Instanz; Folgelogik der
+Kontrollfahrt (Boot-Status etc.).
+
 ## DB-Härtung & Ein-Prozess-Betrieb (Ports + DB-Zugriff vom Wachplan-Generator übernommen)
 Die im Schwester-Projekt erprobte SQLite-/Port-Logik 1:1 nach Turmstatus übertragen –
 Voraussetzung für den robusten NAS-Betrieb und die spätere Zusammenführung beider Apps:

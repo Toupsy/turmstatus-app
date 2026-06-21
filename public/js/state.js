@@ -10,7 +10,8 @@ let towers = [];             // [{ id, name, callSign, latitude, longitude, requ
 let guards = [];             // [{ id, name, towerId, towerName, status, latitude, longitude, userId }]
 let boats = [];              // [{ id, name, callSign, towerId, towerName, status, latitude, longitude }]
 let requests = [];           // [{ id, guardId, guardName, reason, note, status, ... }]
-let users = [];              // (Admin) [{ id, username, role, ... }]
+let users = [];              // (Admin/Wachführer) [{ id, username, role, ... }]
+let controlTrips = [];       // [{ id, boatId, boatName, status, ... }] Kontrollfahrt-Anfragen
 
 let activeTab = 'map';       // aktueller Tab
 
@@ -20,5 +21,7 @@ let _markerLayer = null;
 
 // Rollen-Helfer
 const isHauptwache = () => currentUser && currentUser.role === 'HAUPTWACHE';
-const isTurmfuehrer = () => currentUser && currentUser.role === 'TURMFUEHRER';
-const canManage = () => currentUser && currentUser.isAdmin;
+const isWachfuehrer = () => currentUser && currentUser.role === 'WACHFUEHRER';
+const isBootsfuehrer = () => currentUser && currentUser.role === 'BOOTSFUEHRER';
+const canManage = () => currentUser && currentUser.isAdmin;        // App-Admin: volle Benutzerverwaltung
+const canManageTeam = () => isWachfuehrer();                       // Wachführer: nur eigene Wache

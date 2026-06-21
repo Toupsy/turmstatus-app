@@ -54,6 +54,13 @@ function wireEvents() {
   document.getElementById('reject-cancel').onclick = () => closeModal('reject-modal');
   document.getElementById('reject-submit').onclick = submitReject;
 
+  // Kontrollfahrt Modals
+  document.getElementById('btn-new-control-trip').onclick = openControlTrip;
+  document.getElementById('ct-cancel').onclick = () => closeModal('control-trip-modal');
+  document.getElementById('ct-submit').onclick = submitControlTrip;
+  document.getElementById('ct-reject-cancel').onclick = () => closeModal('ct-reject-modal');
+  document.getElementById('ct-reject-submit').onclick = submitRejectControlTrip;
+
   // Passwort Modal
   document.getElementById('pw-modal-close-btn').onclick = () => closeModal('pw-modal');
   document.getElementById('pw-modal-confirm').onclick = submitPasswordChange;

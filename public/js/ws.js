@@ -15,7 +15,8 @@ function _handleEvent(type) {
     case 'guards-updated': refreshGuards(); refreshTowers(); refreshDashboard(); break;
     case 'boats-updated': refreshBoats(); refreshDashboard(); break;
     case 'requests-updated': refreshRequests(); refreshGuards(); refreshDashboard(); break;
-    case 'users-updated': if (canManage()) refreshAdmin(); break;
+    case 'control-trips-updated': refreshControlTrips(); break;
+    case 'users-updated': if (canManage() || canManageTeam()) refreshAdmin(); break;
     default: break;
   }
 }

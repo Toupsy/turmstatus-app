@@ -63,7 +63,7 @@ router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => 
 // Hilfsfunktion: darf der aktuelle User diesen Wachgänger ändern?
 function canModifyGuard(user, guard) {
   if (user.role === 'HAUPTWACHE') return true;
-  if (user.role === 'TURMFUEHRER' && guard.tower_id === user.tower_id) return true;
+  if (user.role === 'WACHFUEHRER' && guard.tower_id === user.tower_id) return true;
   if (guard.user_id && guard.user_id === user.id) return true; // eigener Wachgänger
   return false;
 }
