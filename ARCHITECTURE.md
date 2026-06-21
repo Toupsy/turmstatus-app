@@ -33,11 +33,11 @@ PATCH  /api/guards/:id/status       PATCH /api/guards/:id/position
 GET    /api/boats                   POST/PATCH/DELETE
 
 POST   /api/requests/minus-one      [WACHGAENGER|BOOTSFUEHRER|WACHFUEHRER]
-POST   /api/requests/:id/approve    POST /api/requests/:id/reject   [HAUPTWACHE]
+POST   /api/requests/:id/approve    POST /api/requests/:id/reject   [WACHFUEHRER(eigene Wache); Admin NICHT]
 POST   /api/requests/:id/return     GET  /api/requests?status=PENDING
 
 GET    /api/control-trips           POST [BOOTSFUEHRER]
-POST   /api/control-trips/:id/approve  POST /api/control-trips/:id/reject  [HAUPTWACHE|WACHFUEHRER(eigene Wache)]
+POST   /api/control-trips/:id/approve  POST /api/control-trips/:id/reject  [WACHFUEHRER(eigene Wache); Admin NICHT]
 
 GET    /api/dashboard/summary
 GET    /api/admin/users  POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [App-Admin]
@@ -52,17 +52,21 @@ WS     /api/ws                       (Broadcast aller Lageänderungen)
 App-Admin = `is_admin` (technischer Administrator). „Hauptwache" als externe Instanz ist noch nicht
 getrennt modelliert (aktuell = `role=HAUPTWACHE` + `is_admin`).
 
-| Aktion | App-Admin (Hauptwache) | Wachführer | Wachgänger | Bootsführer |
+Der App-Admin hat **reine Ansichts- + Account-Verwaltungsrechte** und KEINE operativen
+Bestätigungsrechte. Genehmigt wird ausschließlich vom Wachführer der jeweiligen Wache.
+
+| Aktion | App-Admin | Wachführer | Wachgänger | Bootsführer |
 |---|:---:|:---:|:---:|:---:|
 | Lagebild sehen (Türme/Boote/Wachgänger) | ✅ | ✅ | ✅ | ✅ |
-| `-1` beantragen | ✅ | ✅ | ✅ | ✅ |
-| `-1` genehmigen/ablehnen | ✅ | – | – | – |
-| `+1` / Rückkehr melden | ✅ | ✅ | ✅ | ✅ |
-| Kontrollfahrt beantragen | – | – | – | ✅ |
-| Kontrollfahrt genehmigen/ablehnen | ✅ | eigene Wache | – | – |
-| Turm/Boot bearbeiten | ✅ | eigene Wache | – | – |
+| `-1` beantragen (Türme) | – | ✅ | ✅ | ✅ |
+| `-1` genehmigen/ablehnen | – | eigene Wache | – | – |
+| `+1` / Rückkehr melden | – | ✅ | ✅ | ✅ |
+| Kontrollfahrt beantragen (Boote) | – | – | – | ✅ |
+| Kontrollfahrt genehmigen/ablehnen | – | eigene Wache | – | – |
+| Türme/Boote anlegen/bearbeiten (Infrastruktur) | ✅ | eigene Wache | – | – |
+| Wachführer-Profil/Turmstati ansehen | ✅ (read-only) | – | – | – |
 | Wachführer anlegen (+ Wache zuweisen) | ✅ | – | – | – |
-| Wachgänger/Bootsführer der eigenen Wache anlegen | ✅ | ✅ (nur eigene Wache) | – | – |
+| Wachgänger/Bootsführer der eigenen Wache anlegen | – | ✅ (nur eigene Wache) | – | – |
 | Audit-Log | ✅ | – | – | – |
 
 ## 5. Echtzeit & Robustheit

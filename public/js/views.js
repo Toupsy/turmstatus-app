@@ -94,11 +94,13 @@ function renderTowers() {
 // ── Wachgänger ───────────────────────────────────────────────
 function renderGuards() {
   if (!guards.length) { document.getElementById('guard-table').innerHTML = '<p class="muted">Keine Wachgänger.</p>'; return; }
+  // Der App-Admin (HAUPTWACHE) hat reine Ansichtsrechte – keine operativen Aktionen.
+  const canAct = !isHauptwache();
   const rows = guards.map(g => {
     let action = '';
-    if (g.status === 'IN_AREA') {
+    if (canAct && g.status === 'IN_AREA') {
       action = `<button onclick="openMinusOne(${g.id})">-1 beantragen</button>`;
-    } else if (g.status === 'MINUS_ONE') {
+    } else if (canAct && g.status === 'MINUS_ONE') {
       const reqId = approvedRequestForGuard(g.id);
       if (reqId) action = `<button class="ok" onclick="returnRequest(${reqId})">+1 Rückkehr</button>`;
     }
@@ -122,7 +124,8 @@ function approvedRequestForGuard(guardId) {
 // ── Boote ────────────────────────────────────────────────────
 function renderBoats() {
   if (!boats.length) { document.getElementById('boat-table').innerHTML = '<p class="muted">Keine Boote.</p>'; return; }
-  const canEdit = isHauptwache() || isWachfuehrer();
+  // Boot-Status setzt der Wachführer (operativ); der App-Admin nur Ansicht.
+  const canEdit = isWachfuehrer();
   const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
   const rows = boats.map(b => {
     const statusCell = canEdit
@@ -157,11 +160,12 @@ function renderRequests() {
   } else {
     const rows = pending.map(r => {
       let actions = '';
-      if (isHauptwache()) {
+      // Entscheiden darf nur der Wachführer der eigenen Wache (Turm der Anfrage).
+      if (isWachfuehrer() && currentUser.towerId === r.towerId) {
         actions = `<button class="ok" onclick="approveRequest(${r.id})">Genehmigen</button>
                    <button class="danger" onclick="openReject(${r.id})">Ablehnen</button>`;
       } else {
-        actions = '<span class="muted">wartet auf Hauptwache</span>';
+        actions = '<span class="muted">wartet auf Wachführer</span>';
       }
       return `<tr>
         <td>${escapeHtml(r.guardName)}</td>
@@ -255,14 +259,15 @@ function renderControlTrips() {
     listEl.innerHTML = '<p class="muted">Keine Kontrollfahrt-Anfragen.</p>';
     return;
   }
-  const canDecide = isHauptwache() || isWachfuehrer();
   const rows = controlTrips.map(c => {
     let actions = '';
+    // Entscheiden darf nur der Wachführer der eigenen Wache (Turm des Boots).
+    const canDecide = isWachfuehrer() && currentUser.towerId === c.towerId;
     if (c.status === 'PENDING' && canDecide) {
       actions = `<button class="ok" onclick="approveControlTrip(${c.id})">Genehmigen</button>
                  <button class="danger" onclick="openRejectControlTrip(${c.id})">Ablehnen</button>`;
     } else if (c.status === 'PENDING') {
-      actions = '<span class="muted">wartet auf Genehmigung</span>';
+      actions = '<span class="muted">wartet auf Wachführer</span>';
     }
     return `<tr>
       <td>${escapeHtml(c.boatName)}${c.boatCallSign ? ' (' + escapeHtml(c.boatCallSign) + ')' : ''}</td>
@@ -319,7 +324,11 @@ async function submitRejectControlTrip() {
 // ── Verwaltung (Admin) ───────────────────────────────────────
 function renderUsers() {
   if (!users.length) { document.getElementById('user-table').innerHTML = '<p class="muted">Keine Benutzer.</p>'; return; }
-  const rows = users.map(u => `
+  const rows = users.map(u => {
+    // Admin: read-only Einblick in die Wache eines Wachführers (Turmstati, ohne Aktionen).
+    const profileBtn = (canManage() && u.role === 'WACHFUEHRER' && u.towerId)
+      ? `<button onclick='openWfProfile(${JSON.stringify(u)})'>Profil ansehen</button> ` : '';
+    return `
     <tr>
       <td>${escapeHtml(u.username)}</td>
       <td>${escapeHtml(u.fullName || '–')}</td>
@@ -328,12 +337,39 @@ function renderUsers() {
       <td>${u.isActive ? '✓' : '✗'}</td>
       <td>${fmtTime(u.lastLogin)}</td>
       <td class="row-actions">
-        <button onclick='openUserModal(${JSON.stringify(u)})'>Bearbeiten</button>
+        ${profileBtn}<button onclick='openUserModal(${JSON.stringify(u)})'>Bearbeiten</button>
         <button class="danger" onclick="deleteUser(${u.id})">Löschen</button>
       </td>
-    </tr>`).join('');
+    </tr>`; }).join('');
   document.getElementById('user-table').innerHTML =
     `<table><thead><tr><th>Benutzer</th><th>Name</th><th>Rolle</th><th>Turm</th><th>Aktiv</th><th>Letzter Login</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// Read-only Wachführer-Profil: zeigt dem App-Admin die Lage der Wache (Turm + Wachgänger
+// + Boote des zugeordneten Turms) – rein zur Ansicht, KEINE Bestätigungs-/Aktionsrechte.
+function openWfProfile(u) {
+  const towerId = u.towerId;
+  const tower = towers.find(t => t.id === towerId);
+  const wTowerRows = tower
+    ? `<tr><td>${escapeHtml(tower.name)}</td><td>${tower.currentStaff}/${tower.requiredStaff}</td><td>${statusPill('towerStatus', tower.status)}</td></tr>`
+    : '<tr><td colspan="3" class="muted">Kein Turm gefunden.</td></tr>';
+  const wGuards = guards.filter(g => g.towerId === towerId);
+  const guardRows = wGuards.length
+    ? wGuards.map(g => `<tr><td>${escapeHtml(g.name)}</td><td>${statusPill('guardStatus', g.status)}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="muted">Keine Wachgänger.</td></tr>';
+  const wBoats = boats.filter(b => b.towerId === towerId);
+  const boatRows = wBoats.length
+    ? wBoats.map(b => `<tr><td>${escapeHtml(b.name)}</td><td>${statusPill('boatStatus', b.status)}</td></tr>`).join('')
+    : '<tr><td colspan="2" class="muted">Keine Boote.</td></tr>';
+
+  document.getElementById('wf-profile-title').textContent =
+    `Wache von ${u.fullName || u.username}${tower ? ' · ' + tower.name : ''}`;
+  document.getElementById('wf-profile-body').innerHTML =
+    `<p class="muted">Reine Ansicht – keine Bestätigungen möglich.</p>
+     <h4>Turm</h4><table><thead><tr><th>Turm</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${wTowerRows}</tbody></table>
+     <h4 style="margin-top:12px">Wachgänger</h4><table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>${guardRows}</tbody></table>
+     <h4 style="margin-top:12px">Boote</h4><table><thead><tr><th>Boot</th><th>Status</th></tr></thead><tbody>${boatRows}</tbody></table>`;
+  openModal('wf-profile-modal');
 }
 
 // Basis-Endpunkt der Benutzerverwaltung je nach Rolle:

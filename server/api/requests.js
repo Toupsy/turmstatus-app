@@ -96,13 +96,26 @@ async function loadRequest(id) {
   return dbGet('SELECT * FROM minus_one_requests WHERE id = ?', [id]);
 }
 
-// POST /api/requests/:id/approve [HAUPTWACHE] → Wachgänger auf MINUS_ONE
-router.post('/:id/approve', requireRole('HAUPTWACHE'), async (req, res) => {
+// Genehmigen/Ablehnen darf NUR der Wachführer der EIGENEN Wache (Turm des Wachgängers).
+// Der App-Admin (HAUPTWACHE/is_admin) hat bewusst KEINE Bestätigungsrechte (reine Ansicht).
+// Liefert { error, status } bei fehlender Berechtigung, sonst { reqRow, guard }.
+async function loadDecidableRequest(req, id) {
+  const reqRow = await loadRequest(id);
+  if (!reqRow) return { error: 404, message: 'Request not found' };
+  const guard = await dbGet('SELECT * FROM guards WHERE id = ?', [reqRow.guard_id]);
+  if (req.user.role !== 'WACHFUEHRER' || !req.user.tower_id || !guard || guard.tower_id !== req.user.tower_id) {
+    return { error: 403, message: 'Nur der Wachführer der eigenen Wache darf entscheiden' };
+  }
+  return { reqRow, guard };
+}
+
+// POST /api/requests/:id/approve [WACHFUEHRER(eigene Wache)] → Wachgänger auf MINUS_ONE
+router.post('/:id/approve', async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Anfrage-ID' });
-    const reqRow = await loadRequest(id);
-    if (!reqRow) return res.status(404).json({ error: 'Request not found' });
+    const { reqRow, error, message } = await loadDecidableRequest(req, id);
+    if (error) return res.status(error).json({ error: message });
     if (reqRow.status !== 'PENDING') return res.status(409).json({ error: 'Anfrage ist nicht mehr offen' });
 
     await dbRun(
@@ -119,13 +132,13 @@ router.post('/:id/approve', requireRole('HAUPTWACHE'), async (req, res) => {
   }
 });
 
-// POST /api/requests/:id/reject [HAUPTWACHE]
-router.post('/:id/reject', requireRole('HAUPTWACHE'), express.json(), async (req, res) => {
+// POST /api/requests/:id/reject [WACHFUEHRER(eigene Wache)]
+router.post('/:id/reject', express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Anfrage-ID' });
-    const reqRow = await loadRequest(id);
-    if (!reqRow) return res.status(404).json({ error: 'Request not found' });
+    const { reqRow, error, message } = await loadDecidableRequest(req, id);
+    if (error) return res.status(error).json({ error: message });
     if (reqRow.status !== 'PENDING') return res.status(409).json({ error: 'Anfrage ist nicht mehr offen' });
 
     const rejection = (req.body.rejectionReason || '').slice(0, MAX_NOTE_LEN) || null;
