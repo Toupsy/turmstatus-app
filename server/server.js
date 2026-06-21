@@ -108,10 +108,15 @@ app.get('/health', (req, res) => {
 // ── Server starten ─────────────────────────────────────────────
 async function start() {
   try {
-    const { dbPath } = require('./db/connection');
+    const { dbPath, dbRun } = require('./db/connection');
 
     await initDatabase();
     console.log('✓ Database ready');
+
+    // Pragma-Queue der Haupt-Connection (foreign_keys, journal_mode=DELETE,
+    // busy_timeout) abwarten, BEVOR der Session-Store seine eigene Connection
+    // öffnet – sonst racet der journal_mode-Switch mit CREATE TABLE sessions.
+    await dbRun('SELECT 1');
 
     // Session-Middleware (SQLite-Store). Referenz für WS-Upgrade-Auth behalten.
     const sessionMiddleware = createSessionMiddleware({ resave: true, saveUninitialized: true });
@@ -172,6 +177,23 @@ async function start() {
     // Live-Lagebild (WebSocket /api/ws)
     const { setupRealtime } = require('./realtime');
     setupRealtime(server, sessionMiddleware);
+
+    // ── Admin-Panel IM SELBEN Prozess auf ADMIN_PORT mitbedienen ──────
+    // GRUND (SQLITE_CORRUPT-Dauerfix): Lief das Admin-Panel als zweiter Container
+    // (admin-server.js) neben diesem Server, öffneten ZWEI Prozesse dieselbe
+    // turmstatus.db auf dem geteilten Volume → transientes „database disk image is
+    // malformed". Ein Prozess, der beide Ports bedient, öffnet die DB nur einmal.
+    // Die Admin-App teilt sich dieselbe Session-Middleware (= dieselbe DB-Verbindung).
+    // RUN_EMBEDDED_ADMIN=0 → klassischer Zwei-Prozess-Betrieb (nur mit getrennter DB!).
+    const adminPort = process.env.ADMIN_PORT;
+    if (adminPort && process.env.RUN_EMBEDDED_ADMIN !== '0') {
+      const { createAdminApp } = require('./admin-server');
+      const adminApp = createAdminApp({ sessionMiddleware });
+      adminApp.listen(adminPort, HOST, () => {
+        console.log('🔐 Turmstatus Admin-Panel (eingebettet) läuft');
+        console.log(`   URL: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${adminPort}`);
+      });
+    }
 
     process.on('SIGTERM', () => {
       console.log('SIGTERM empfangen, fahre herunter...');

@@ -9,6 +9,18 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (DB-/Port-Härtung vom Wachplan-Generator übernommen)
+Die bewährte SQLite-/Port-Logik des Schwester-Projekts ist jetzt auch hier umgesetzt:
+- **EIN Prozess, beide Ports:** Admin-Panel (3003) wird per `ADMIN_PORT` in den Hauptprozess
+  (3002) eingebettet (`createAdminApp({sessionMiddleware})`); beide `docker-compose*.yml` nur
+  noch **ein** Container. (Vorher: zwei Container auf einem Volume → `SQLITE_CORRUPT`.)
+- **`journal_mode=DELETE`** (kein WAL) + `busy_timeout` + `OPEN_FULLMUTEX` an allen Writer-
+  Connections; **Sessions in eigener `sessions.db`** (`OPEN_MEMORY`-Bug behoben); Init-Lock +
+  `integrity_check` + Session-Auto-Heilung in `db/init.js`; transienter DB-Retry.
+- Neuer Regressionstest `test/db-journal-mode.test.js`. `npm test` → **16/16 grün**.
+- **Querverweis/geteilte Konten** beider Apps bewusst **noch nicht** gebaut; `DATABASE_PATH`/
+  `SESSION_DB_PATH` sind die vorgesehenen Schalter für eine spätere gemeinsame User-/Session-DB.
+
 ## Meilensteine
 ### ✅ M1 – Infrastruktur (deckungsgleich Wachplan-Generator)
 - `db/connection.js`, `db/session.js`, `db/ids.js`, `db/crypto.js` 1:1 übernommen (nur DB-Name `turmstatus.db`).
