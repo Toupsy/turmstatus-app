@@ -190,6 +190,10 @@
         <h2>Verlauf</h2>
         <div id="request-history"></div>
       </div>
+      <div class="panel">
+        <h2>Kontrollfahrten <button id="btn-new-control-trip" class="primary" style="float:right;display:none">+ Kontrollfahrt</button></h2>
+        <div id="control-trip-list"></div>
+      </div>
     </section>
 
     <!-- Verwaltung (Admin) -->
@@ -238,6 +242,36 @@
   </div>
 </div>
 
+<!-- ── Kontrollfahrt beantragen Modal ── -->
+<div id="control-trip-modal" class="modal">
+  <div class="modal-box">
+    <h3>Kontrollfahrt beantragen</h3>
+    <label for="ct-boat-id">Boot</label>
+    <select id="ct-boat-id"></select>
+    <label for="ct-note">Notiz (optional)</label>
+    <textarea id="ct-note" rows="2"></textarea>
+    <div class="err" id="ct-error"></div>
+    <div class="modal-actions">
+      <button id="ct-cancel">Abbrechen</button>
+      <button class="primary" id="ct-submit">Beantragen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Kontrollfahrt ablehnen Modal ── -->
+<div id="ct-reject-modal" class="modal">
+  <div class="modal-box">
+    <h3>Kontrollfahrt ablehnen</h3>
+    <input type="hidden" id="ct-reject-id">
+    <label for="ct-reject-reason">Begründung (optional)</label>
+    <textarea id="ct-reject-reason" rows="2"></textarea>
+    <div class="modal-actions">
+      <button id="ct-reject-cancel">Abbrechen</button>
+      <button class="danger" id="ct-reject-submit">Ablehnen</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Passwort ändern Modal ── -->
 <div id="pw-modal" class="modal">
   <div class="modal-box">
@@ -266,11 +300,7 @@
     <label for="user-modal-fullname">Voller Name</label>
     <input id="user-modal-fullname">
     <label for="user-modal-role">Rolle</label>
-    <select id="user-modal-role">
-      <option value="WACHGAENGER">Wachgänger</option>
-      <option value="TURMFUEHRER">Turmführer</option>
-      <option value="HAUPTWACHE">Hauptwache</option>
-    </select>
+    <select id="user-modal-role"><!-- Optionen werden rollenabhängig per JS gefüllt --></select>
     <label for="user-modal-tower">Turm (optional)</label>
     <select id="user-modal-tower"></select>
     <div id="user-modal-pw-field">

@@ -61,8 +61,8 @@ router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => 
   }
 });
 
-// PATCH /api/boats/:id – Status/Position/Stammdaten [HAUPTWACHE | TURMFUEHRER]
-router.patch('/:id', requireRole('TURMFUEHRER'), express.json(), async (req, res) => {
+// PATCH /api/boats/:id – Status/Position/Stammdaten [HAUPTWACHE | WACHFUEHRER]
+router.patch('/:id', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Boot-ID' });

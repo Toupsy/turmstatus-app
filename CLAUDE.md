@@ -55,23 +55,25 @@ db/session.js      createSessionMiddleware (SQLite-Store, DRY für beide Server)
 db/ids.js          parsePositiveInt (strikte ID-Validierung, kein '5abc'→5)
 db/audit.js        recordAudit(req, action, ...) → audit_log
 api/auth.js        login/logout/me/init/needs-setup/registration/register/password + Brute-Force-Schutz
-api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD [HAUPTWACHE | TURMFUEHRER(eigener)]
+api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD [HAUPTWACHE | WACHFUEHRER(eigener)]
 api/guards.js      Wachgänger: Liste, CRUD, Status/Position
 api/boats.js       Boote: Liste, CRUD, Status/Position
 api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr
+api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → HAUPTWACHE/WACHFUEHRER genehmigt/lehnt ab (NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen)
 api/dashboard.js   GET /summary – Lage-Kennzahlen
-api/admin.js       Admin-only: Benutzerverwaltung + Audit-Log (vom Haupt- UND Admin-Server gemountet)
+api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers (Haupt- UND Admin-Server)
+api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng auf eigene Wache (tower_id) gescoped
 ```
 **Pfad-Konvention:** `server/*` → `../public`/`../data`; `server/db/*` → `../../data`.
 
 **Frontend `public/js/`** — Ladereihenfolge in `Turmstatus.html` beachten:
 ```
-state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, users, _map)
+state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
 utils.js   escapeHtml, showToast, fmtTime, labelOf, statusPill, openModal/closeModal
 api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON)
 auth.js    Login/Setup/Register-Modal + User-Header + Passwortwechsel
 map.js     Leaflet-Karte: initMap(), renderMap() (Türme farbcodiert, Wachgänger/Boote als Marker)
-views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1-Aktionen
+views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1-Aktionen + Kontrollfahrt-Aktionen; Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
 ws.js      WebSocket-Client (/api/ws) → Refresh je Event + 30-s-Polling-Fallback
 init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung; Event-Listener
 ```
@@ -82,7 +84,7 @@ init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung
 
 ## Datenmodell (SQLite, `db/schema.sql`)
 ```
-users   id, username, password_hash, full_name, role[HAUPTWACHE|TURMFUEHRER|WACHGAENGER],
+users   id, username, password_hash, full_name, role[HAUPTWACHE|WACHFUEHRER|WACHGAENGER|BOOTSFUEHRER],
         tower_id(FK), is_admin, is_active, last_login, created_at, updated_at
 towers  id, name, call_sign, latitude, longitude, required_staff, created_at
 guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, updated_at
@@ -90,11 +92,16 @@ boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_O
 minus_one_requests  id, guard_id(FK), requested_by(FK), reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER],
                     note, status[PENDING|APPROVED|REJECTED|RETURNED], rejection_reason,
                     created_at, decided_at, decided_by(FK), returned_at
+control_trip_requests  id, boat_id(FK), requested_by(FK), note, status[PENDING|APPROVED|REJECTED],
+                    rejection_reason, created_at, decided_at, decided_by(FK)
 audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_address, timestamp
 ```
 **Turmfarbe (`status.js`):** besetzt = Wachgänger mit Status `IN_AREA`.
 `GREEN` ≥ Sollstärke, `YELLOW` ≥ 50 %, sonst `RED`.
-**Rollen serverseitig erzwungen** (`middleware.js`): HAUPTWACHE darf alles; Turmführer nur eigenen Turm; Wachgänger nur eigenen Status/-1.
+**Rollen serverseitig erzwungen** (`middleware.js`): HAUPTWACHE darf alles; Wachführer nur eigene Wache (Turm + eigenes Personal); Wachgänger nur eigenen Status/-1; Bootsführer wie Wachgänger + darf Kontrollfahrten beantragen.
+
+**Konten-Hierarchie (Account-Anlage):** Der **App-Admin** (`is_admin`, technischer Administrator – NICHT „die Hauptwache", die liegt extern) legt über `/api/admin/*` v. a. **Wachführer** an und weist ihnen ihre Wache (`tower_id`) zu. **Wachführer** legen über `/api/team/*` das **eigene** Wachpersonal (Wachgänger/Bootsführer) an – `tower_id` wird serverseitig auf die eigene Wache erzwungen, sodass kein Wachführer in eine fremde Wache eingreifen kann. Es muss nicht jeder Wachgänger ein eigenes Konto haben (ein gemeinsames Konto pro Wache genügt, ist aber nicht erzwungen).
+**Hinweis (NOCH OFFEN):** „Hauptwache" als von der App-Admin-Rolle getrennte, externe Instanz ist konzeptionell gewünscht, aber noch nicht modelliert – aktuell ist `role=HAUPTWACHE` + `is_admin=1` der App-Admin. Kontrollfahrt-Folgelogik (Boot-Status etc.) folgt später.
 
 ---
 
@@ -158,6 +165,11 @@ eine gemeinsame User-/Session-DB zeigen. Bewusst **nicht** vorgebaut – erst be
   Lagebild noch ungenutzt – bereit für künftige verschlüsselte Daten. `MASTER_SECRET`/`SALT`
   nicht ändern, sobald verschlüsselte Daten existieren.
 - **Timezone:** SQLite-Zeitstempel sind UTC; im Frontend (`fmtTime`) als UTC interpretiert und lokal formatiert.
+- **Cookie `secure` (`db/session.js`):** Ein explizit gesetztes `COOKIE_SECURE` (true/false) hat IMMER
+  Vorrang; nur wenn es **nicht** gesetzt ist, gilt `NODE_ENV=production` als Default. **Falle (gefixt):**
+  Früher war es ein ODER → in production wurde `secure=true` erzwungen, auch bei `COOKIE_SECURE=false`.
+  Ohne TLS (HTTP-only) verwarf der Browser dann das `Secure`-Cookie still → jeder authentifizierte
+  Request kam ohne Session an („Not authenticated", u. a. beim Benutzer-Anlegen im Admin-Panel).
 
 ---
 

@@ -1,9 +1,10 @@
 {
-  "roles": ["HAUPTWACHE", "TURMFUEHRER", "WACHGAENGER"],
+  "roles": ["HAUPTWACHE", "WACHFUEHRER", "WACHGAENGER", "BOOTSFUEHRER"],
   "roleLabels": {
     "HAUPTWACHE": "Hauptwache",
-    "TURMFUEHRER": "Turmführer",
-    "WACHGAENGER": "Wachgänger"
+    "WACHFUEHRER": "Wachführer",
+    "WACHGAENGER": "Wachgänger",
+    "BOOTSFUEHRER": "Bootsführer"
   },
   "requestStatus": {
     "PENDING": "Offen",

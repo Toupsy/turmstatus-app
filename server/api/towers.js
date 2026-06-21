@@ -64,7 +64,7 @@ router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => 
   }
 });
 
-// PATCH /api/towers/:id – bearbeiten [HAUPTWACHE | TURMFUEHRER(eigener Turm)]
+// PATCH /api/towers/:id – bearbeiten [HAUPTWACHE | WACHFUEHRER(eigener Turm)]
 router.patch('/:id', express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -72,7 +72,7 @@ router.patch('/:id', express.json(), async (req, res) => {
 
     // Turmführer darf nur den eigenen Turm bearbeiten; Hauptwache jeden.
     if (req.user.role !== 'HAUPTWACHE') {
-      if (req.user.role !== 'TURMFUEHRER' || req.user.tower_id !== id) {
+      if (req.user.role !== 'WACHFUEHRER' || req.user.tower_id !== id) {
         return res.status(403).json({ error: 'Keine Berechtigung für diesen Turm' });
       }
     }

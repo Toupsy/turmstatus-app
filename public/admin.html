@@ -51,7 +51,9 @@
       <label>Benutzername</label><input id="form-username">
       <label>Voller Name</label><input id="form-fullname">
       <label>Rolle</label>
-      <select id="form-role"><option value="WACHGAENGER">Wachgänger</option><option value="TURMFUEHRER">Turmführer</option><option value="HAUPTWACHE">Hauptwache</option></select>
+      <select id="form-role"><option value="WACHFUEHRER">Wachführer</option><option value="WACHGAENGER">Wachgänger</option><option value="BOOTSFUEHRER">Bootsführer</option><option value="HAUPTWACHE">Hauptwache</option></select>
+      <label>Wache / Turm (für Wachführer)</label>
+      <select id="form-tower"><option value="">– kein Turm –</option></select>
       <label>Passwort (nur bei neuem Benutzer / Reset)</label><input id="form-password" type="password">
       <div class="err" id="form-err"></div>
       <div style="margin-top:12px"><button class="primary" id="save-btn">Speichern</button> <button id="reset-pw-btn">Passwort zurücksetzen</button></div>
@@ -75,7 +77,16 @@ async function req(method, url, body){
 async function showAdmin(){
   document.getElementById('login-box').classList.add('hidden');
   document.getElementById('admin-box').classList.remove('hidden');
-  await loadUsers(); await loadAudit();
+  await loadTowers(); await loadUsers(); await loadAudit();
+}
+
+async function loadTowers(){
+  try{
+    const {towers}=await req('GET','/api/admin/towers');
+    document.getElementById('form-tower').innerHTML =
+      '<option value="">– kein Turm –</option>'+
+      towers.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  }catch(e){ /* ignore */ }
 }
 
 async function loadUsers(){
@@ -100,6 +111,7 @@ function edit(u){
   document.getElementById('form-username').disabled=true;
   document.getElementById('form-fullname').value=u.fullName||'';
   document.getElementById('form-role').value=u.role;
+  document.getElementById('form-tower').value=u.towerId||'';
   document.getElementById('form-password').value='';
   document.getElementById('form-err').textContent='';
 }
@@ -108,14 +120,16 @@ function newUser(){
   document.getElementById('form-username').value='';
   document.getElementById('form-username').disabled=false;
   document.getElementById('form-fullname').value='';
-  document.getElementById('form-role').value='WACHGAENGER';
+  document.getElementById('form-role').value='WACHFUEHRER';
+  document.getElementById('form-tower').value='';
   document.getElementById('form-password').value='';
   document.getElementById('form-err').textContent='';
 }
 async function save(){
   const id=document.getElementById('form-id').value;
   const err=document.getElementById('form-err');
-  const payload={fullName:document.getElementById('form-fullname').value,role:document.getElementById('form-role').value};
+  const towerVal=document.getElementById('form-tower').value;
+  const payload={fullName:document.getElementById('form-fullname').value,role:document.getElementById('form-role').value,towerId:towerVal?Number(towerVal):null};
   try{
     if(id){ await req('PATCH','/api/admin/users/'+id,payload); }
     else{ payload.username=document.getElementById('form-username').value; payload.password=document.getElementById('form-password').value; await req('POST','/api/admin/users',payload); }

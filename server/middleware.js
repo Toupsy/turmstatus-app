@@ -1,6 +1,6 @@
 // ============================================================
 // Auth- & Rollen-Middleware (Turmstatus)
-// Rollen serverseitig erzwungen: HAUPTWACHE | TURMFUEHRER | WACHGAENGER
+// Rollen serverseitig erzwungen: HAUPTWACHE | WACHFUEHRER | WACHGAENGER | BOOTSFUEHRER
 // ============================================================
 
 const { dbGet } = require('./db/connection');

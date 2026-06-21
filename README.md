@@ -15,10 +15,14 @@ durch einen digitalen Genehmigungs-Workflow und zeigt die Lage aller **Türme**,
 - **Digitale -1 / +1**: Wachgänger beantragt „Bereich verlassen" mit Grund (Pause, Toilette,
   Verpflegung, Material, Sonstiges) + optionalem Freitext → Hauptwache genehmigt/lehnt ab → `+1` Rückkehr.
 - **Dashboard Hauptwache**: Lage-Kennzahlen (Türme, im Dienst, aktive -1, Boote, offene Anfragen).
+- **Kontrollfahrten**: Bootsführer beantragen eine Kontrollfahrt für ein Boot → Hauptwache/Wachführer
+  genehmigt oder lehnt ab (erste Ausbaustufe, ohne weitere Boot-Statuslogik).
 - **Echtzeit** über WebSockets (mit Polling-Fallback alle 30 s).
-- **Rollen** serverseitig erzwungen: Hauptwache, Turmführer, Wachgänger.
+- **Rollen** serverseitig erzwungen: Hauptwache, Wachführer, Wachgänger, Bootsführer.
+- **Konten-Hierarchie**: Der App-Admin legt Wachführer an (mit Wache); jeder Wachführer legt das
+  Personal seiner **eigenen** Wache (Wachgänger/Bootsführer) selbst an.
 - **Benutzerverwaltung** + **Audit-Protokoll** (Wer/Wann/Was), im Admin-Panel (Port 3003) oder
-  in der App (Tab „Verwaltung", nur Hauptwache).
+  in der App (Tab „Verwaltung"): App-Admin verwaltet alle, Wachführer nur die eigene Wache.
 - **Responsive** für Smartphone, Tablet und Desktop.
 
 ## Technologie

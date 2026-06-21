@@ -11,7 +11,7 @@ const { parsePositiveInt } = require('../db/ids');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
-const ROLES = ['HAUPTWACHE', 'TURMFUEHRER', 'WACHGAENGER'];
+const ROLES = ['HAUPTWACHE', 'WACHFUEHRER', 'WACHGAENGER', 'BOOTSFUEHRER'];
 const MIN_PASSWORD_LENGTH = 10;
 
 // Admin-Gate: Session nötig + is_admin. (Eigenständig, damit der Admin-Server
@@ -29,6 +29,17 @@ async function requireAdmin(req, res, next) {
 }
 
 router.use(requireAdmin);
+
+// GET /api/admin/towers – schlanke Turmliste (Admin-Panel hat keinen /api/towers-Mount)
+router.get('/towers', async (req, res) => {
+  try {
+    const towers = await dbAll('SELECT id, name FROM towers ORDER BY name');
+    res.json({ towers });
+  } catch (error) {
+    console.error('List towers (admin) error:', error);
+    res.status(500).json({ error: 'Failed to list towers' });
+  }
+});
 
 // GET /api/admin/users
 router.get('/users', async (req, res) => {

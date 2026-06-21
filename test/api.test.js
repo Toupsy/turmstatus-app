@@ -106,3 +106,59 @@ test('Dashboard-Summary liefert Kennzahlen', async () => {
   assert.ok(typeof data.towers === 'number');
   assert.ok(typeof data.openRequests === 'number');
 });
+
+test('Konten-Hierarchie: Admin→Wachführer→Team (gescoped)', async () => {
+  // Als Hauptwache (App-Admin) angemeldet (vorheriger Test) → Turm-ID holen
+  const towers = (await api('GET', '/api/towers')).data.towers;
+  const towerId = towers[0].id;
+
+  // Admin legt Wachführer mit Wache an
+  const wf = await api('POST', '/api/admin/users',
+    { username: 'wf_test', password: 'wachfuehrer-123', role: 'WACHFUEHRER', towerId });
+  assert.strictEqual(wf.status, 201);
+
+  // Wachführer meldet sich an und legt eigenes Personal an
+  const wfLogin = await api('POST', '/api/auth/login', { username: 'wf_test', password: 'wachfuehrer-123' });
+  assert.strictEqual(wfLogin.data.role, 'WACHFUEHRER');
+
+  const wg = await api('POST', '/api/team/members', { username: 'wg_test', password: 'wachgaenger-123', role: 'WACHGAENGER' });
+  assert.strictEqual(wg.status, 201);
+  const bf = await api('POST', '/api/team/members', { username: 'bf_test', password: 'bootsfuehrer-123', role: 'BOOTSFUEHRER' });
+  assert.strictEqual(bf.status, 201);
+
+  // Team-Liste enthält nur die eigene Wache und beide neuen Konten
+  const team = (await api('GET', '/api/team/members')).data.users;
+  assert.strictEqual(team.length, 2);
+  assert.ok(team.every(u => u.towerId === towerId));
+
+  // Wachgänger darf KEIN Konto anlegen
+  await api('POST', '/api/auth/login', { username: 'wg_test', password: 'wachgaenger-123' });
+  const denied = await api('POST', '/api/team/members', { username: 'x_test', password: 'yyyyyyyyyy', role: 'WACHGAENGER' });
+  assert.strictEqual(denied.status, 403);
+});
+
+test('Kontrollfahrt: Bootsführer beantragt → Hauptwache genehmigt', async () => {
+  // Bootsführer anmelden, Boot wählen
+  await api('POST', '/api/auth/login', { username: 'bf_test', password: 'bootsfuehrer-123' });
+  const boats = (await api('GET', '/api/boats')).data.boats;
+  const boatId = boats[0].id;
+
+  // Wachgänger dürfte das nicht
+  await api('POST', '/api/auth/login', { username: 'wg_test', password: 'wachgaenger-123' });
+  const wgTry = await api('POST', '/api/control-trips', { boatId });
+  assert.strictEqual(wgTry.status, 403);
+
+  // Bootsführer beantragt
+  await api('POST', '/api/auth/login', { username: 'bf_test', password: 'bootsfuehrer-123' });
+  const ct = await api('POST', '/api/control-trips', { boatId, note: 'Routinekontrolle' });
+  assert.strictEqual(ct.status, 201);
+  const ctId = ct.data.id;
+
+  // Hauptwache genehmigt
+  await api('POST', '/api/auth/login', { username: 'hauptwache', password: 'wache2024test' });
+  const approve = await api('POST', `/api/control-trips/${ctId}/approve`);
+  assert.strictEqual(approve.status, 200);
+
+  const trips = (await api('GET', '/api/control-trips')).data.controlTrips;
+  assert.strictEqual(trips.find(t => t.id === ctId).status, 'APPROVED');
+});
