@@ -54,6 +54,9 @@ function wireEvents() {
   document.getElementById('reject-cancel').onclick = () => closeModal('reject-modal');
   document.getElementById('reject-submit').onclick = submitReject;
 
+  // Wachführer-Profil (Admin, read-only)
+  document.getElementById('wf-profile-close').onclick = () => closeModal('wf-profile-modal');
+
   // Kontrollfahrt Modals
   document.getElementById('btn-new-control-trip').onclick = openControlTrip;
   document.getElementById('ct-cancel').onclick = () => closeModal('control-trip-modal');

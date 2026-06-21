@@ -91,8 +91,8 @@ router.post('/', requireRole('BOOTSFUEHRER'), express.json(), async (req, res) =
   }
 });
 
-// Lädt eine Anfrage und prüft, dass der Wachführer (falls nicht Hauptwache) nur
-// Kontrollfahrten von Booten der EIGENEN Wache entscheidet.
+// Entscheiden darf NUR der Wachführer der EIGENEN Wache (Turm des Boots). Der App-Admin
+// (HAUPTWACHE/is_admin) hat bewusst KEINE Bestätigungsrechte (reine Ansicht).
 async function loadDecidable(req, id) {
   const row = await dbGet(
     `SELECT c.*, b.tower_id AS boat_tower_id FROM control_trip_requests c
@@ -100,18 +100,20 @@ async function loadDecidable(req, id) {
     [id]
   );
   if (!row) return { error: 404 };
-  if (req.user.role !== 'HAUPTWACHE' && row.boat_tower_id !== req.user.tower_id) return { error: 403 };
+  if (req.user.role !== 'WACHFUEHRER' || !req.user.tower_id || row.boat_tower_id !== req.user.tower_id) {
+    return { error: 403 };
+  }
   return { row };
 }
 
-// POST /api/control-trips/:id/approve [HAUPTWACHE | WACHFUEHRER(eigene Wache)]
-router.post('/:id/approve', requireRole('WACHFUEHRER'), async (req, res) => {
+// POST /api/control-trips/:id/approve [WACHFUEHRER(eigene Wache)]
+router.post('/:id/approve', async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Anfrage-ID' });
     const { row, error } = await loadDecidable(req, id);
     if (error === 404) return res.status(404).json({ error: 'Request not found' });
-    if (error === 403) return res.status(403).json({ error: 'Keine Berechtigung für diese Wache' });
+    if (error === 403) return res.status(403).json({ error: 'Nur der Wachführer der eigenen Wache darf entscheiden' });
     if (row.status !== 'PENDING') return res.status(409).json({ error: 'Anfrage ist nicht mehr offen' });
 
     await dbRun(
@@ -127,14 +129,14 @@ router.post('/:id/approve', requireRole('WACHFUEHRER'), async (req, res) => {
   }
 });
 
-// POST /api/control-trips/:id/reject [HAUPTWACHE | WACHFUEHRER(eigene Wache)]
-router.post('/:id/reject', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
+// POST /api/control-trips/:id/reject [WACHFUEHRER(eigene Wache)]
+router.post('/:id/reject', express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Anfrage-ID' });
     const { row, error } = await loadDecidable(req, id);
     if (error === 404) return res.status(404).json({ error: 'Request not found' });
-    if (error === 403) return res.status(403).json({ error: 'Keine Berechtigung für diese Wache' });
+    if (error === 403) return res.status(403).json({ error: 'Nur der Wachführer der eigenen Wache darf entscheiden' });
     if (row.status !== 'PENDING') return res.status(409).json({ error: 'Anfrage ist nicht mehr offen' });
 
     const rejection = (req.body.rejectionReason || '').slice(0, MAX_NOTE_LEN) || null;

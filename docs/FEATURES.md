@@ -2,6 +2,22 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Genehmiger-Modell: Wachführer entscheidet, App-Admin ist view-only
+
+Verfeinerung des Rechtemodells gemäß Zielarchitektur:
+- **App-Admin** (`is_admin`/HAUPTWACHE) hat **keine operativen Bestätigungsrechte** mehr. Die
+  -1- und Kontrollfahrt-Genehmigung erfolgt nun ausschließlich durch den **Wachführer der eigenen
+  Wache** (Turm-Match). Admin behält: Account-Verwaltung (Wachführer anlegen) + reine Ansicht.
+- **Server:** `requests.js` und `control-trips.js` nutzen für approve/reject NICHT mehr
+  `requireRole('HAUPTWACHE')` (das ließ den Admin durch), sondern explizite Gates
+  (`loadDecidableRequest`/`loadDecidable`): `role==='WACHFUEHRER' && tower_id===<Wache der Anfrage>`.
+- **Frontend:** Genehmigen/Ablehnen-Buttons (−1 + Kontrollfahrt) nur für den Wachführer der
+  betroffenen Wache; dem Admin werden alle operativen Aktionen (−1/+1 beantragen, Boot-Status,
+  Genehmigen) ausgeblendet. Neuer read-only **„Profil ansehen"**-Dialog: der Admin sieht die Lage
+  einer Wache (Turm/Wachgänger/Boote) ohne jede Bestätigungsmöglichkeit.
+- **Tests:** `api.test.js` prüft jetzt explizit, dass der Admin −1 und Kontrollfahrt **nicht**
+  genehmigen darf (403) und der Wachführer der Wache erfolgreich (200).
+
 ## Rollen-Hierarchie, Wachführer-Personalverwaltung, Bootsführer + Kontrollfahrten; Cookie-Fix
 
 **Bugfix „Not authenticated" beim Benutzer-Anlegen im Admin-Panel:** In `db/session.js`

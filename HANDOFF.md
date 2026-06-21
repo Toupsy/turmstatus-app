@@ -9,7 +9,17 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
-## Zuletzt (Rollen-Hierarchie, Wachführer-Personalverwaltung, Bootsführer/Kontrollfahrten, Cookie-Fix)
+## Zuletzt (Genehmiger-Modell: Wachführer entscheidet, Admin view-only)
+- **App-Admin ist jetzt rein ansehend** + Account-Verwaltung; **keine** operativen Bestätigungen mehr.
+- **-1- und Kontrollfahrt-Genehmigung** nur durch den **Wachführer der eigenen Wache** (Turm-Match) –
+  serverseitig über explizite Gates in `requests.js`/`control-trips.js` (kein `requireRole`-HAUPTWACHE-
+  Bypass). Frontend blendet operative Aktionen für den Admin aus.
+- Neuer read-only **„Profil ansehen"**-Dialog für den Admin (Lage einer Wache, ohne Aktionen).
+- `api.test.js` deckt ab: Admin-Genehmigung → 403, Wachführer der Wache → 200 (−1 + Kontrollfahrt).
+- Manuell per curl verifiziert. **Offen:** Boot-PATCH erlaubt am API noch den HAUPTWACHE-Bypass
+  (UI blendet es aus); „Hauptwache" als externe Instanz weiterhin nicht getrennt modelliert.
+
+## Davor (Rollen-Hierarchie, Wachführer-Personalverwaltung, Bootsführer/Kontrollfahrten, Cookie-Fix)
 - **Bugfix „Not authenticated"** beim Benutzer-Anlegen im Admin-Panel: Session-Cookie-`secure`
   war in production immer `true` (ODER-Logik) und ignorierte `COOKIE_SECURE=false` → über HTTP
   verwarf der Browser das Cookie. Jetzt hat explizites `COOKIE_SECURE` Vorrang (`db/session.js`).

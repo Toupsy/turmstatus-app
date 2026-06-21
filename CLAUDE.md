@@ -59,7 +59,7 @@ api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD [HAUPTWACHE | WAC
 api/guards.js      Wachgänger: Liste, CRUD, Status/Position
 api/boats.js       Boote: Liste, CRUD, Status/Position
 api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr
-api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → HAUPTWACHE/WACHFUEHRER genehmigt/lehnt ab (NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen)
+api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → WACHFUEHRER(eigene Wache) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
 api/dashboard.js   GET /summary – Lage-Kennzahlen
 api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers (Haupt- UND Admin-Server)
 api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng auf eigene Wache (tower_id) gescoped
@@ -98,7 +98,19 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 ```
 **Turmfarbe (`status.js`):** besetzt = Wachgänger mit Status `IN_AREA`.
 `GREEN` ≥ Sollstärke, `YELLOW` ≥ 50 %, sonst `RED`.
-**Rollen serverseitig erzwungen** (`middleware.js`): HAUPTWACHE darf alles; Wachführer nur eigene Wache (Turm + eigenes Personal); Wachgänger nur eigenen Status/-1; Bootsführer wie Wachgänger + darf Kontrollfahrten beantragen.
+**Rollen serverseitig erzwungen** (`middleware.js` + endpunktspezifische Gates):
+- **App-Admin** (`is_admin`, Rolle HAUPTWACHE): Account-Verwaltung (legt Wachführer an) + **reine Ansicht**.
+  Hat **KEINE** operativen Bestätigungsrechte – -1- und Kontrollfahrt-Genehmigung sind ihm verwehrt
+  (eigene Gates in `requests.js`/`control-trips.js`, NICHT über `requireRole` mit HAUPTWACHE-Bypass).
+- **Wachführer**: sieht alles; **genehmigt/lehnt ab** (-1 + Kontrollfahrten) **nur für die eigene Wache**
+  (Turm-Match); verwaltet eigenes Personal (Turm).
+- **Wachgänger**: sieht alles; darf nur **-1 beantragen**.
+- **Bootsführer**: wie Wachgänger + darf **Kontrollfahrten beantragen**.
+
+> **Falle:** `requireRole(...)` lässt HAUPTWACHE immer durch („darf alles"). Für die Genehmigungs-
+> Endpunkte ist das bewusst NICHT genutzt – stattdessen prüfen `loadDecidableRequest()` /
+> `loadDecidable()` explizit `role==='WACHFUEHRER' && tower_id===<Wache der Anfrage>`. Wer einen
+> neuen operativen Bestätigungs-Endpunkt baut, darf den Admin NICHT per `requireRole` durchlassen.
 
 **Konten-Hierarchie (Account-Anlage):** Der **App-Admin** (`is_admin`, technischer Administrator – NICHT „die Hauptwache", die liegt extern) legt über `/api/admin/*` v. a. **Wachführer** an und weist ihnen ihre Wache (`tower_id`) zu. **Wachführer** legen über `/api/team/*` das **eigene** Wachpersonal (Wachgänger/Bootsführer) an – `tower_id` wird serverseitig auf die eigene Wache erzwungen, sodass kein Wachführer in eine fremde Wache eingreifen kann. Es muss nicht jeder Wachgänger ein eigenes Konto haben (ein gemeinsames Konto pro Wache genügt, ist aber nicht erzwungen).
 **Hinweis (NOCH OFFEN):** „Hauptwache" als von der App-Admin-Rolle getrennte, externe Instanz ist konzeptionell gewünscht, aber noch nicht modelliert – aktuell ist `role=HAUPTWACHE` + `is_admin=1` der App-Admin. Kontrollfahrt-Folgelogik (Boot-Status etc.) folgt später.
