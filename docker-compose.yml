@@ -11,65 +11,46 @@
 #     MASTER_SECRET=... SESSION_SECRET=... ADMIN_PASSWORD=... docker compose up -d
 #
 # Lokal selbst bauen: docker compose -f docker-compose.build.yml up -d --build
+#
+# WICHTIG: EIN einziger Container bedient BEIDE Ports (App 3002 + Admin 3003).
+# Früher lief das Admin-Panel als ZWEITER Container (`node server/admin-server.js`)
+# auf demselben `turmstatus-data`-Volume → zwei Prozesse öffneten dieselbe SQLite-Datei.
+# SQLite koordiniert gleichzeitige Zugriffe nur INNERHALB eines Prozesses zuverlässig;
+# zwischen Prozessen auf einem (NAS-)Volume entstand transientes SQLITE_CORRUPT
+# ("database disk image is malformed"). server.js bettet das Panel jetzt über
+# ADMIN_PORT in den Hauptprozess ein (ein einziger DB-Öffner) → Problem behoben.
 # ============================================================
 
-x-turmstatus-base: &turmstatus-base
-  image: ghcr.io/toupsy/turmstatus-app:${IMAGE_TAG:-latest}
-  restart: unless-stopped
-  environment:
-    NODE_ENV: ${NODE_ENV:-production}
-    # Ohne TLS-Reverse-Proxy false lassen, sonst kommt der Session-Cookie nicht zurück.
-    COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    # ── Secrets (für Produktion ÄNDERN) ──────────────────────
-    MASTER_SECRET: ${MASTER_SECRET:-aendern-32-zeichen-langes-master-secret}
-    SALT: ${SALT:-aendern-16-zeichen-salt}
-    SESSION_SECRET: ${SESSION_SECRET:-aendern-session-secret-16}
-    # ── Erst-Admin / Hauptwache ──────────────────────────────
-    ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-    ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}  # ÄNDERN
-    # ── Selbstregistrierung: disabled | open | code ──────────
-    REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
-  volumes:
-    - turmstatus-data:/app/data
-  networks:
-    - turmstatus
-
 services:
-  # Haupt-App (Lagebild) auf Port 3002 → Host HTTP_PORT (Default 3002)
+  # Haupt-App (Lagebild, Port 3002) inkl. eingebettetem Admin-Panel (Port 3003, via ADMIN_PORT)
   turmstatus:
-    <<: *turmstatus-base
+    image: ghcr.io/toupsy/turmstatus-app:${IMAGE_TAG:-latest}
     container_name: dlrg-turmstatus
-    ports:
-      - "${HTTP_PORT:-3002}:3002"
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  # Admin-Panel auf Port 3003 (gleiches Image, anderer Entry-Point)
-  turmstatus-admin:
-    <<: *turmstatus-base
-    container_name: dlrg-turmstatus-admin
-    command: node server/admin-server.js
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
+      # Ohne TLS-Reverse-Proxy false lassen, sonst kommt der Session-Cookie nicht zurück.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # ── Secrets (für Produktion ÄNDERN) ──────────────────────
       MASTER_SECRET: ${MASTER_SECRET:-aendern-32-zeichen-langes-master-secret}
       SALT: ${SALT:-aendern-16-zeichen-salt}
       SESSION_SECRET: ${SESSION_SECRET:-aendern-session-secret-16}
+      # ── Erst-Admin / Hauptwache ──────────────────────────────
       ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-wache2024}  # ÄNDERN
+      # ── Selbstregistrierung: disabled | open | code ──────────
       REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
+      # ── Eingebettetes Admin-Panel im selben Prozess auf Port 3003 ──
       ADMIN_PORT: "3003"
+    volumes:
+      - turmstatus-data:/app/data
+    networks:
+      - turmstatus
     ports:
-      - "${ADMIN_HTTP_PORT:-3003}:3003"
-    depends_on:
-      turmstatus:
-        condition: service_healthy
+      - "${HTTP_PORT:-3002}:3002"
+      - "${ADMIN_HTTP_PORT:-3003}:3003"   # Admin-Panel; bei Bedarf per Firewall/Proxy getrennt absichern
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3003/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

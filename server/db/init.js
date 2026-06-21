@@ -1,7 +1,8 @@
 // ============================================================
 // Database Initialization
 // SQLite Setup, Schema Migration, Environment Validation, Seed
-// (Aufbau analog zum Wachplan-Generator – an die Turmstatus-Domäne angepasst)
+// (Aufbau deckungsgleich zum Wachplan-Generator – an die Turmstatus-Domäne angepasst:
+//  Integritäts-Check, Session-Auto-Heilung, Init-Lock, journal_mode=DELETE)
 // ============================================================
 
 const sqlite3 = require('sqlite3');
@@ -20,6 +21,12 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const dbPath = process.env.DATABASE_PATH || path.join(dataDir, 'turmstatus.db');
+
+const DB_BUSY_TIMEOUT_MS = Number.parseInt(process.env.DB_BUSY_TIMEOUT_MS || '30000', 10);
+const INTEGRITY_RETRIES = Number.parseInt(process.env.DB_INTEGRITY_RETRIES || '6', 10);
+const TRANSIENT_INTEGRITY_CODES = new Set(['SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLITE_PROTOCOL']);
+const INIT_LOCK_TIMEOUT_MS = Number.parseInt(process.env.DB_INIT_LOCK_TIMEOUT_MS || '60000', 10);
+const INIT_LOCK_STALE_MS = Number.parseInt(process.env.DB_INIT_LOCK_STALE_MS || '120000', 10);
 
 // ── Demo-Seed: Türme + Boote an Ostsee-Koordinaten (nur wenn towers leer) ──
 const SEED_TOWERS = [
@@ -73,7 +80,11 @@ function validateEnv() {
 // Initialize database
 function initDatabase() {
   return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(dbPath, (err) => {
+    const db = new sqlite3.Database(
+      dbPath,
+      sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE | sqlite3.OPEN_FULLMUTEX,
+      (err) => {
+      let releaseInitLock = null;
       if (err) {
         console.error('❌ Failed to open database:', err);
         reject(err);
@@ -81,35 +92,236 @@ function initDatabase() {
       }
 
       console.log('✓ Database connection established:', dbPath);
+      if (typeof db.configure === 'function') db.configure('busyTimeout', DB_BUSY_TIMEOUT_MS);
 
-      // Drop legacy/incorrect sessions table; connect-sqlite3 recreates it correctly.
-      db.run('DROP TABLE IF EXISTS sessions', () => {});
+      // Rollback-Journal (DELETE) statt WAL – früh und auf DERSELBEN Verbindung, die
+      // gleich das Schema schreibt. WAL ist zwischen zwei Prozessen auf einem geteilten
+      // Volume nicht prozess-kohärent und korrumpiert die DB (s. connection.js). Setzt
+      // zudem eine bestehende WAL-DB beim Start auf DELETE zurück, bevor irgendetwas
+      // geschrieben wird. Init-Lock serialisiert parallele Starter (App + Admin-Panel).
+      acquireInitLock()
+        .then((release) => {
+          releaseInitLock = release;
+          return configureStartupConnection(db);
+        })
+        .then(() => checkIntegrity(db))
+        .then(() => proceedAfterIntegrity())
+        .catch((integErr) => {
+          if (integErr && integErr.isInitLockError) {
+            db.close(() => reject(integErr));
+            return;
+          }
+          if (isTransientIntegrityError(integErr)) {
+            console.warn('⚠ Database integrity check skipped: database is busy/locked.');
+            console.warn('   This is not corruption. Another process is currently using ' + dbPath);
+            proceedAfterIntegrity();
+            return;
+          }
+          // Auto-Heilung: Ist die Beschädigung auf die (wegwerfbare) sessions-Tabelle
+          // beschränkt, kann sie gefahrlos entfernt werden – connect-sqlite3 legt sie
+          // beim nächsten Session-Schreiben neu an. Nutzer/Daten bleiben unberührt.
+          healSessionCorruption(db, integErr).then((healed) => {
+            if (healed) { proceedAfterIntegrity(); return; }
 
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      const schema = fs.readFileSync(schemaPath, 'utf-8');
+            console.error('');
+            console.error('============================================================');
+            console.error('❌ DATENBANK-INTEGRITÄTSPRÜFUNG FEHLGESCHLAGEN');
+            console.error('   ' + integErr.message);
+            console.error('   Datei: ' + dbPath);
+            console.error('   Vermutlich beschädigt (SQLITE_CORRUPT). Wiederherstellung:');
+            console.error('     1) Container stoppen');
+            console.error('     2) sqlite3 turmstatus.db ".recover" | sqlite3 turmstatus.db.recovered');
+            console.error('     3) recovered-DB nach Prüfung einspielen, -wal/-shm löschen');
+            console.error('============================================================');
+            console.error('');
+            if (process.env.DB_ALLOW_CORRUPT_START !== '1') {
+              console.error('   Start wird abgebrochen. Setze DB_ALLOW_CORRUPT_START=1 nur zur Notfall-Datenrettung.');
+              db.close((closeErr) => {
+                if (releaseInitLock) releaseInitLock();
+                reject(closeErr || integErr);
+              });
+              return;
+            }
+            proceedAfterIntegrity();
+          });
+        });
 
-      db.exec(schema, (err) => {
-        if (err) {
-          console.error('❌ Failed to execute schema:', err);
-          db.close(() => reject(err));
-          return;
+      function proceedAfterIntegrity() {
+        // Drop legacy/incorrectly-structured sessions table; connect-sqlite3 recreates it.
+        // Nur bei altem/falschem Schema droppen – sonst würden persistente Sessions
+        // (Merke-mich) bei jedem Neustart gelöscht.
+        db.all('PRAGMA table_info(sessions)', (err, cols) => {
+          if (err || !cols || cols.length === 0) return;
+          const names = cols.map(c => c.name);
+          if (names.includes('expiryDate') || names.includes('session')) {
+            db.run('DROP TABLE IF EXISTS sessions', () => {});
+          }
+        });
+
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        const schema = fs.readFileSync(schemaPath, 'utf-8');
+
+        db.exec(schema, (err) => {
+          if (err) {
+            console.error('❌ Failed to execute schema:', err);
+            db.close(() => {
+              if (releaseInitLock) releaseInitLock();
+              reject(err);
+            });
+            return;
+          }
+
+          console.log('✓ Database schema initialized');
+
+          // Idempotente Migrationen (greifen NICHT über CREATE TABLE IF NOT EXISTS auf
+          // Bestands-DBs). Für jede neue Spalte ein ALTER TABLE; Fehler ("duplicate
+          // column name") werden bewusst ignoriert. sqlite3 serialisiert Statements.
+          db.run("ALTER TABLE users ADD COLUMN last_login DATETIME", () => {});
+          db.run("ALTER TABLE users ADD COLUMN full_name TEXT", () => {});
+          db.run("ALTER TABLE users ADD COLUMN tower_id INTEGER", () => {});
+          db.run("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1", () => {});
+
+          // Domain-Seed (Türme/Boote) + Admin-Seed nacheinander
+          seedDomain(db, () => seedAdmin(db, (seedErr) => {
+            db.close((closeErr) => {
+              if (releaseInitLock) releaseInitLock();
+              if (seedErr) reject(seedErr);
+              else if (closeErr) reject(closeErr);
+              else resolve();
+            });
+          }));
+        });
+      } // end proceedAfterIntegrity
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Datei-basiertes Init-Lock (mkdir ist atomar): serialisiert mehrere Prozesse, die
+// dieselbe DB gleichzeitig initialisieren (z. B. App + standalone Admin-Panel beim
+// Hochfahren). Verhindert Schema-/Migrations-Races. Stale-Locks (Crash) werden
+// nach INIT_LOCK_STALE_MS entfernt.
+function acquireInitLock() {
+  const lockDir = `${dbPath}.init.lock`;
+  const started = Date.now();
+
+  return new Promise(async (resolve, reject) => {
+    while (true) {
+      try {
+        fs.mkdirSync(lockDir);
+        fs.writeFileSync(path.join(lockDir, 'owner'), `${process.pid}\n${new Date().toISOString()}\n`);
+        return resolve(() => {
+          try { fs.rmSync(lockDir, { recursive: true, force: true }); } catch {}
+        });
+      } catch (err) {
+        if (!err || err.code !== 'EEXIST') {
+          if (err) err.isInitLockError = true;
+          return reject(err);
         }
 
-        console.log('✓ Database schema initialized');
+        try {
+          const stat = fs.statSync(lockDir);
+          if (Date.now() - stat.mtimeMs > INIT_LOCK_STALE_MS) {
+            console.warn('Stale database init lock removed: ' + lockDir);
+            fs.rmSync(lockDir, { recursive: true, force: true });
+            continue;
+          }
+        } catch {}
 
-        // Idempotente Migrationen (greifen NICHT über CREATE TABLE IF NOT EXISTS auf
-        // Bestands-DBs). Für jede neue Spalte ein ALTER TABLE; Fehler ("duplicate
-        // column name") werden bewusst ignoriert. sqlite3 serialisiert Statements.
-        db.run("ALTER TABLE users ADD COLUMN last_login DATETIME", () => {});
-        db.run("ALTER TABLE users ADD COLUMN full_name TEXT", () => {});
-        db.run("ALTER TABLE users ADD COLUMN tower_id INTEGER", () => {});
-        db.run("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1", () => {});
+        if (Date.now() - started > INIT_LOCK_TIMEOUT_MS) {
+          const timeout = new Error(`Timed out waiting for database init lock: ${lockDir}`);
+          timeout.isInitLockError = true;
+          return reject(timeout);
+        }
 
-        // Domain-Seed (Türme/Boote) + Admin-Seed nacheinander
-        seedDomain(db, () => seedAdmin(db, (err) => {
-          if (err) db.close(() => reject(err));
-          else db.close((closeErr) => closeErr ? reject(closeErr) : resolve());
-        }));
+        await sleep(250);
+      }
+    }
+  });
+}
+
+function runDb(db, sql) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
+async function configureStartupConnection(db) {
+  // Queue these explicitly before any schema writes or integrity reads.
+  await runDb(db, `PRAGMA busy_timeout = ${DB_BUSY_TIMEOUT_MS}`);
+  await runDb(db, 'PRAGMA journal_mode = DELETE');
+}
+
+function isTransientIntegrityError(err) {
+  if (!err) return false;
+  if (TRANSIENT_INTEGRITY_CODES.has(err.code)) return true;
+  return /SQLITE_BUSY|SQLITE_LOCKED|database is locked|database table is locked/i.test(String(err.message || ''));
+}
+
+// Führt PRAGMA integrity_check aus und lehnt ab, wenn die DB beschädigt ist.
+function checkIntegrity(db) {
+  return new Promise((resolve, reject) => {
+    let attempt = 0;
+    const runCheck = () => {
+      db.all('PRAGMA integrity_check', (err, rows) => {
+        if (err) {
+          if (isTransientIntegrityError(err) && attempt < INTEGRITY_RETRIES) {
+            attempt += 1;
+            setTimeout(runCheck, 250 * attempt);
+            return;
+          }
+          reject(err);
+          return;
+        }
+        const lines = (rows || []).map(r => r && r.integrity_check).filter(Boolean);
+        if (lines.length === 1 && lines[0] === 'ok') {
+          console.log('✓ Database integrity check: ok');
+          resolve();
+        } else {
+          reject(new Error('integrity_check: ' + (lines.join('; ') || 'unbekannter Fehler')));
+        }
+      });
+    };
+    runCheck();
+  });
+}
+
+// Prüft, ob eine integrity_check-Meldung AUSSCHLIESSLICH die (wegwerfbare)
+// sessions-Tabelle/ihren Autoindex betrifft.
+function isSessionsOnlyCorruption(message) {
+  const m = String(message || '').toLowerCase();
+  if (!m.includes('sessions')) return false;
+  if (/\bidx_[a-z0-9_]+/.test(m)) return false;
+  const autoIdxTables = [...m.matchAll(/sqlite_autoindex_([a-z0-9_]+?)_\d+/g)].map(x => x[1]);
+  if (autoIdxTables.some(t => t !== 'sessions')) return false;
+  return true;
+}
+
+// Versucht, eine auf die sessions-Tabelle beschränkte Beschädigung automatisch zu
+// beheben: Tabelle droppen, VACUUM, erneut per integrity_check verifizieren.
+// Per DB_NO_SESSION_AUTOHEAL=1 abschaltbar.
+function healSessionCorruption(db, integErr) {
+  return new Promise((resolve) => {
+    if (process.env.DB_NO_SESSION_AUTOHEAL === '1') return resolve(false);
+    if (!isSessionsOnlyCorruption(integErr && integErr.message)) return resolve(false);
+
+    console.warn('⚠ DB-Beschädigung betrifft nur die (wegwerfbare) sessions-Tabelle – versuche Auto-Heilung…');
+    db.run('DROP TABLE IF EXISTS sessions', (dropErr) => {
+      if (dropErr) {
+        console.error('   Auto-Heilung fehlgeschlagen (DROP sessions): ' + dropErr.message);
+        return resolve(false);
+      }
+      db.run('VACUUM', () => {
+        checkIntegrity(db)
+          .then(() => {
+            console.log('✓ Auto-Heilung erfolgreich: beschädigte sessions-Tabelle entfernt.');
+            console.log('  Sessions sind wegwerfbar – Nutzer/Daten unberührt. Bitte erneut anmelden.');
+            resolve(true);
+          })
+          .catch(() => resolve(false));
       });
     });
   });

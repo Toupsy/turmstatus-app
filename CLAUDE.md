@@ -30,7 +30,9 @@ auf einer OpenStreetMap-Karte (Leaflet).
 
 - **Frontend:** reines **Vanilla JS** (kein Framework), `public/Turmstatus.html` + `public/js/*`.
 - **Backend:** **Express + SQLite**, Session-Auth (bcryptjs), WebSocket-Live-Lagebild.
-- **Start:** `npm start` → `server/server.js` (Port 3002); Admin: `server/admin-server.js` (Port 3003).
+- **Start:** `npm start` → `server/server.js` (Port 3002). Admin-Panel (Port 3003) wird per
+  `ADMIN_PORT` **im selben Prozess** mitbedient (eingebettet, EIN DB-Öffner); `server/admin-server.js`
+  bleibt Standalone-Entry-Point (eigene DB) bzw. liefert `createAdminApp()` für die Einbettung.
 - **Tests:** `npm test` (Node `--test`).
 
 ---
@@ -40,7 +42,7 @@ auf einer OpenStreetMap-Karte (Leaflet).
 **Backend `server/`:**
 ```
 server.js          Express (Port 3002), Static aus ../public, Route-Registration, /api/version, /api/config, WS
-admin-server.js    Admin-Server (Port 3003), gleiches Image, anderer Entry-Point (Benutzerverwaltung + Audit)
+admin-server.js    createAdminApp({sessionMiddleware}) (vom Haupt-Prozess auf ADMIN_PORT eingebettet) + Standalone-Start (require.main-Guard, eigene DB)
 realtime.js        WebSocket-Server (/api/ws): broadcast(type) an ALLE Clients (gemeinsames Lagebild)
 status.js          Reine Statuslogik: deriveTowerStatus() (DOM-/DB-frei, testbar)
 middleware.js      requireAuth (lädt req.user inkl. Rolle) + requireRole(...) (HAUPTWACHE darf alles)
@@ -96,6 +98,47 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 
 ---
 
+## DB-Zugriff & Ports (deckungsgleich Wachplan-Generator – nicht abweichen!)
+
+**EIN Prozess öffnet die DB (SQLITE_CORRUPT-Dauerfix):** SQLite koordiniert gleichzeitige
+Zugriffe nur **innerhalb eines Prozesses** zuverlässig. Liefen App (3002) und Admin-Panel
+(3003) als **zwei** Container auf demselben Volume, öffneten zwei Prozesse dieselbe
+`turmstatus.db` → transientes `SQLITE_CORRUPT: database disk image is malformed`. **Fix:**
+`server.js` bettet das Admin-Panel via `createAdminApp({sessionMiddleware})` (aus
+`admin-server.js`) auf `ADMIN_PORT` in den **Hauptprozess** ein (teilt dieselbe
+Session-Middleware/DB-Verbindung); `docker-compose*.yml` starten nur noch **EINEN** Container
+für beide Ports. `admin-server.js` bleibt als Standalone-Entry-Point (`require.main`-Guard)
+für getrennten Betrieb erhalten – dann aber **nur mit eigener DB**. `RUN_EMBEDDED_ADMIN=0`
+schaltet das Einbetten ab.
+
+**Journal-Modus = DELETE (nicht WAL!):** WALs `-shm`-mmap ist prozessübergreifend nicht
+kohärent. `journal_mode=DELETE` + `busy_timeout` an **allen** Writer-Connections:
+`db/connection.js` (getDb, FULLMUTEX), `db/init.js` (Startup-Connection, konvertiert WAL→DELETE
+zurück) und `db/session.js` (Store-Connection). **NIEMALS** wieder `WAL` setzen
+(Regressionstest `test/db-journal-mode.test.js`).
+
+**Sessions in eigener Datei (`sessions.db`):** Der Session-Store schreibt **nicht** mehr in
+`turmstatus.db` (zweiter Writer = Korruption), sondern in eine eigene Datei (`SESSION_DB_PATH`).
+Pfad als `{ dir, db: basename }` an connect-sqlite3 (NIE `mode: 0o666` – Bit `0x80` =
+`OPEN_MEMORY` → Sessions lägen unbemerkt in-memory). `destroyUserSessions()` löscht über die
+Store-Connection. Store-Methoden + `touch` mit Retry/No-Write gewrappt (`SESSION_TOUCH_WRITES=1`
+reaktiviert das per-Request-UPDATE).
+
+**Init-Robustheit (`db/init.js`):** `acquireInitLock()` (atomares mkdir-Lock) serialisiert
+parallele Starter; `checkIntegrity()` (`PRAGMA integrity_check`) beim Start; betrifft die
+Beschädigung NUR die wegwerfbare `sessions`-Tabelle, heilt `healSessionCorruption()` automatisch
+(DROP+VACUUM+Re-Check, Opt-out `DB_NO_SESSION_AUTOHEAL=1`). Sonst Recovery-Hinweis + Abbruch
+(`DB_ALLOW_CORRUPT_START=1` nur für Notrettung). Reihenfolge in `server.js`: `initDatabase()` →
+`await dbRun('SELECT 1')` (Pragma-Queue) → Session-Store erzeugen.
+
+**Konto-Überschneidung / Querverweis (Zukunft, NOCH NICHT umgesetzt):** Beide Apps haben ihr
+eigenes `users`/Schema. Für später geteilte Konten (Wachführer-Zugriff auf beide Apps) bzw.
+Daten-Querverweis (Wachgänger aus dem Generator → Turmstatus) sind die Env-Schalter
+`DATABASE_PATH` + `SESSION_DB_PATH` bereits vorhanden: zwei Deployments können so später auf
+eine gemeinsame User-/Session-DB zeigen. Bewusst **nicht** vorgebaut – erst bei echtem Bedarf.
+
+---
+
 ## Konventionen & Fallen (können Bugs verursachen)
 - **DB-Migrationen:** `schema.sql` nutzt `CREATE TABLE IF NOT EXISTS` → neue Spalten greifen
   NICHT auf Bestands-DBs. Für jede neue Spalte **idempotente `ALTER TABLE ... ADD COLUMN`** in
@@ -123,8 +166,11 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 - `status.test.js` – Turmfarben-Ableitung (reine Logik).
 - `ids.test.js` – ID-Parsing.
 - `crypto.test.js` – AES-Round-Trip + falscher Key.
+- `db-journal-mode.test.js` – Regressionsschutz: `journal_mode=delete` (kein WAL), parallele
+  `initDatabase()` serialisieren (Init-Lock), gleichzeitige Writes zweier Connections ohne `SQLITE_CORRUPT`.
 - `api.test.js` – **Integrationstest**: bootet den Server (eigene temp-DB), prüft Auth-Gate,
   Login, Seed-Türme und den vollständigen -1/+1-Workflow.
+- **Hinweis:** `npm install` im frischen Container nötig (sonst `Cannot find module 'dotenv'`/sqlite3-Fehler).
 **CI:** `.github/workflows/test.yml` (`npm ci` + `npm test`, Node 20) bei jedem push/PR → roter Test blockt Merge.
 
 ---

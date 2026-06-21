@@ -4,40 +4,32 @@
 #   POSTGRES_PASSWORD nicht nötig – SQLite-Datei im Volume.
 #   MASTER_SECRET=test SALT=testtesttesttest SESSION_SECRET=test \
 #     ADMIN_PASSWORD=wache2024 docker compose -f docker-compose.build.yml up -d --build
+#
+# WICHTIG: EIN Container bedient BEIDE Ports (App 3002 + Admin 3003 via ADMIN_PORT).
+# Zwei Container auf demselben Volume öffneten dieselbe SQLite-Datei → SQLITE_CORRUPT.
 # ============================================================
-
-x-turmstatus-base: &turmstatus-base
-  build: .
-  restart: unless-stopped
-  environment:
-    MASTER_SECRET: ${MASTER_SECRET:?MASTER_SECRET muss gesetzt sein (min. 32 Zeichen)}
-    SALT: ${SALT:?SALT muss gesetzt sein (min. 16 Zeichen)}
-    SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET muss gesetzt sein (min. 16 Zeichen)}
-    ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
-    ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD muss gesetzt sein}
-    REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
-  volumes:
-    - turmstatus-data:/app/data
-  networks:
-    - turmstatus
 
 services:
   turmstatus:
-    <<: *turmstatus-base
+    build: .
     container_name: dlrg-turmstatus
+    restart: unless-stopped
+    environment:
+      MASTER_SECRET: ${MASTER_SECRET:?MASTER_SECRET muss gesetzt sein (min. 32 Zeichen)}
+      SALT: ${SALT:?SALT muss gesetzt sein (min. 16 Zeichen)}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET muss gesetzt sein (min. 16 Zeichen)}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-hauptwache}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD muss gesetzt sein}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-disabled}
+      # Eingebettetes Admin-Panel im selben Prozess auf Port 3003
+      ADMIN_PORT: "3003"
+    volumes:
+      - turmstatus-data:/app/data
+    networks:
+      - turmstatus
     ports:
       - "${HTTP_PORT:-3002}:3002"
-
-  turmstatus-admin:
-    <<: *turmstatus-base
-    container_name: dlrg-turmstatus-admin
-    command: node server/admin-server.js
-    environment:
-      ADMIN_PORT: "3003"
-    ports:
       - "${ADMIN_HTTP_PORT:-3003}:3003"
-    depends_on:
-      - turmstatus
 
 networks:
   turmstatus:
