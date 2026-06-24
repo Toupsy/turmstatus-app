@@ -46,6 +46,7 @@ admin-server.js    createAdminApp({sessionMiddleware}) (vom Haupt-Prozess auf AD
 realtime.js        WebSocket-Server (/api/ws): broadcast(type) an ALLE Clients (gemeinsames Lagebild)
 status.js          Reine Statuslogik: deriveTowerStatus() (DOM-/DB-frei, testbar)
 middleware.js      requireAuth (lädt req.user inkl. Rolle) + requireRole(...) (HAUPTWACHE darf alles)
+http-common.js     Geteilte HTTP-Bausteine: securityHeaders, trustProxyValue (TRUST_PROXY-Env), overrideClientIp (req.ip aus CF-Connecting-IP/X-Forwarded-For – Audit+Rate-Limit; fälschbar ohne Origin-Lockdown), 404/Error/Signal-Handler
 config.json        Enums/Labels (Rollen, Status, Gründe) + Map-Defaults → GET /api/config
 db/connection.js   Zentrale SQLite-Verbindung: getDb()/dbRun/dbGet/dbAll/dbPath
 db/init.js         Schema-Init, idempotente ALTER TABLE-Migrationen, Demo-Seed (Türme/Boote), Admin-Seed, validateEnv()

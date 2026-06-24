@@ -3,12 +3,11 @@
 // ============================================================
 
 const { dbRun } = require('./connection');
+const { clientIpFromHeaders } = require('../http-common');
 
-/** Client-IP aus X-Forwarded-For (Reverse-Proxy) oder req.ip ableiten. */
+/** Client-IP aus Cloudflare-/Reverse-Proxy-Headern oder req.ip ableiten. */
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
-  return req.ip || null;
+  return clientIpFromHeaders(req) || req.ip || null;
 }
 
 /**

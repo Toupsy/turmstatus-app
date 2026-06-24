@@ -9,6 +9,17 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen)
+- Neuer gemeinsamer `server/http-common.js` mit `trustProxyValue()`, `overrideClientIp()`,
+  `clientIpFromHeaders()`, Security-Headern und gemeinsamen 404/Error/SIGTERM-Handlern.
+- `server.js` und `admin-server.js` nutzen jetzt `TRUST_PROXY` (Default `1`) statt festem
+  `trust proxy = 1` und übernehmen `CF-Connecting-IP` → `X-Real-IP` → `X-Forwarded-For` in
+  `req.ip`; dadurch sehen Audit-Log und Login-Rate-Limit hinter Cloudflare/NGINX die echte IP.
+- `server/db/audit.js` nutzt denselben Header-Pfad; `docs/nginx.cloudflare.conf.example`
+  dokumentiert die fälschungssichere NGINX-Variante mit Cloudflare-IP-Ranges.
+- Regressionsschutz: `test/http-common.test.js` prüft 404-Header-Sent, Header-Priorität und
+  IPv6-Kanonisierung.
+
 ## Zuletzt (Genehmiger-Modell: Wachführer entscheidet, Admin view-only)
 - **App-Admin ist jetzt rein ansehend** + Account-Verwaltung; **keine** operativen Bestätigungen mehr.
 - **-1- und Kontrollfahrt-Genehmigung** nur durch den **Wachführer der eigenen Wache** (Turm-Match) –
