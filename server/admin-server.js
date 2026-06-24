@@ -21,6 +21,15 @@ const { initDatabase, validateEnv } = require('./db/init');
 const { dbRun, dbPath } = require('./db/connection');
 const authApi = require('./api/auth');
 const adminApi = require('./api/admin');
+const {
+  securityHeaders,
+  trustProxyValue,
+  overrideClientIp,
+  notFoundHandler,
+  jsonErrorHandler,
+  installSigtermHandler,
+  installFatalHandlers,
+} = require('./http-common');
 
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -30,25 +39,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 // öffnen. Ohne Übergabe (echter Standalone-Betrieb) erzeugt die App ihre eigene.
 function createAdminApp({ sessionMiddleware } = {}) {
   const app = express();
-  app.set('trust proxy', 1);
+  app.set('trust proxy', trustProxyValue());
+  app.use(overrideClientIp());
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-
-  // Admin-CSP: nur 'self' (+ 'unsafe-inline' für das self-contained admin.html),
-  // KEINE externen Hosts (unpkg/OSM braucht nur der Haupt-Server für die Karte).
-  app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader('Content-Security-Policy',
-      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-      "font-src 'self' https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'; " +
-      "connect-src 'self'; frame-ancestors 'self'");
-    if (process.env.NODE_ENV === 'production')
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    next();
-  });
+  app.use(securityHeaders({ admin: true }));
 
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'admin-panel', timestamp: new Date().toISOString() });
@@ -63,8 +59,8 @@ function createAdminApp({ sessionMiddleware } = {}) {
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'admin.html')));
   app.get('/admin.html', (req, res) => res.redirect('/'));
 
-  app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.url, service: 'admin-panel' }));
-  app.use((err, req, res, next) => { console.error('Error:', err); res.status(500).json({ error: 'Internal server error' }); });
+  app.use(notFoundHandler('admin-panel'));
+  app.use(jsonErrorHandler());
 
   return app;
 }
@@ -90,10 +86,7 @@ async function start() {
       console.log(`   Datenbank: ${dbPath}`);
     });
 
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM empfangen, fahre herunter...');
-      server.close(() => { console.log('Admin-Server beendet'); process.exit(0); });
-    });
+    installSigtermHandler(server, 'Admin-Server');
   } catch (error) {
     console.error('❌ Fehler beim Starten des Admin-Servers:', error.message);
     process.exit(1);
@@ -105,7 +98,6 @@ module.exports = { createAdminApp };
 // Nur als eigener Prozess starten, wenn direkt aufgerufen – beim `require` aus
 // server.js (eingebettetes Panel) darf KEIN zweiter Listener/DB-Prozess hochfahren.
 if (require.main === module) {
-  process.on('uncaughtException', (err) => console.error('❌ Uncaught Exception:', err));
-  process.on('unhandledRejection', (reason) => console.error('❌ Unhandled Rejection:', reason));
+  installFatalHandlers();
   start();
 }

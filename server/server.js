@@ -25,9 +25,21 @@ const controlTripsApi = require('./api/control-trips');
 const dashboardApi = require('./api/dashboard');
 const adminApi = require('./api/admin');
 const teamApi = require('./api/team');
+const {
+  securityHeaders,
+  trustProxyValue,
+  overrideClientIp,
+  notFoundHandler,
+  jsonErrorHandler,
+  installSigtermHandler,
+  installFatalHandlers,
+} = require('./http-common');
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', trustProxyValue());
+// Echte Client-IP aus Proxy-Headern (CF-Connecting-IP/X-Forwarded-For) übernehmen,
+// damit Audit-Log + Rate-Limiting hinter Cloudflare/NGINX die echte IP sehen.
+app.use(overrideClientIp());
 const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -85,22 +97,7 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // ── Basis-Security-Header ──────────────────────────────────────
-// CSP erlaubt unpkg.com (Leaflet JS/CSS) + OpenStreetMap-Tiles (img).
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('Referrer-Policy', 'same-origin');
-  res.setHeader('Content-Security-Policy',
-    "default-src 'self'; " +
-    "img-src 'self' data: https://*.tile.openstreetmap.org https://unpkg.com; " +
-    "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com; " +
-    "font-src 'self' https://fonts.gstatic.com; " +
-    "script-src 'self' 'unsafe-inline' https://unpkg.com; " +
-    "connect-src 'self' ws: wss:; frame-ancestors 'self'");
-  if (process.env.NODE_ENV === 'production')
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  next();
-});
+app.use(securityHeaders());
 
 // ── Health-Check (für Docker/K8s) ──────────────────────────────
 app.get('/health', (req, res) => {
@@ -166,11 +163,8 @@ async function start() {
     });
 
     // 404 + Error-Handler
-    app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.url }));
-    app.use((err, req, res, next) => {
-      console.error('Error:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    });
+    app.use(notFoundHandler());
+    app.use(jsonErrorHandler());
 
     const server = app.listen(PORT, HOST, () => {
       console.log('🛟 Turmstatus läuft');
@@ -199,23 +193,13 @@ async function start() {
       });
     }
 
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM empfangen, fahre herunter...');
-      server.close(() => { console.log('Server beendet'); process.exit(0); });
-    });
+    installSigtermHandler(server, 'Server');
   } catch (error) {
     console.error('❌ Fehler beim Starten des Servers:', error.message);
     process.exit(1);
   }
 }
 
-process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-  if (err.message && err.message.includes('database')) process.exit(1);
-});
-process.on('unhandledRejection', (reason) => {
-  console.error('❌ Unhandled Rejection:', reason);
-  if (reason && reason.message && reason.message.includes('database')) process.exit(1);
-});
+installFatalHandlers();
 
 start();

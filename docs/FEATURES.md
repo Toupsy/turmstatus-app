@@ -2,6 +2,19 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen
+
+Infrastruktur-Härtung für den Betrieb hinter Cloudflare/NGINX:
+- Neuer gemeinsamer `server/http-common.js` bündelt Security-Header, `TRUST_PROXY`-Parsing,
+  Proxy-IP-Ermittlung, 404/Error-Handler und SIGTERM/Fatal-Handler.
+- `TRUST_PROXY` ist jetzt konfigurierbar (Default `1`) und wird in Haupt- und Admin-App genutzt.
+- `overrideClientIp()` setzt `req.ip` aus `CF-Connecting-IP` → `X-Real-IP` → linkestes
+  `X-Forwarded-For`. Damit greifen Audit-Log und Login-Rate-Limit auf die echte Besucher-IP zu,
+  auch wenn NGINX noch nicht umgebaut ist.
+- `docs/nginx.cloudflare.conf.example` zeigt die fälschungssichere Variante: Nur Cloudflare-IP-Ranges
+  dürfen `CF-Connecting-IP` liefern; NGINX reicht genau diese eine IP weiter.
+- Neuer Regressionstest `test/http-common.test.js` für 404-Handling, Header-Priorität und IPv6.
+
 ## Genehmiger-Modell: Wachführer entscheidet, App-Admin ist view-only
 
 Verfeinerung des Rechtemodells gemäß Zielarchitektur:
