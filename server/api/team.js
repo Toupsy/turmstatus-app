@@ -1,11 +1,13 @@
 // ============================================================
-// Team-API – Wachführer verwalten ihr EIGENES Wachpersonal
-// (Wachgänger + Bootsführer) ausschließlich für die eigene Wache (tower_id).
+// Team-API – Wachführer verwalten ihr EIGENES Wachpersonal (WACHGAENGER + BOOTSFUEHRER).
 //
-// Abgrenzung zur Admin-API: /api/admin/* ist dem App-Admin (is_admin) vorbehalten
-// und legt v. a. Wachführer an. Hier legt der Wachführer die Konten seiner Wache an
-// – streng auf den eigenen Turm gescoped, damit ein Wachführer NICHT in den Dienst
-// einer anderen Wache eingreifen kann.
+// Mandanten-Modell (Scope-Isolation): Jedes Personal-Konto gehört genau EINEM Wachführer
+// (users.owner_id). Ein Wachführer sieht/verwaltet ausschließlich Konten mit
+// owner_id === eigene id; andere Wachführer-Scopes bleiben unsichtbar. Optionale
+// Stationierung (tower_id) muss ein eigener Turm des Wachführers sein.
+//
+// Abgrenzung: /api/admin/* ist dem App-Admin (is_admin) vorbehalten und legt v. a.
+// Wachführer an. Hier legt der Wachführer sein eigenes Personal an.
 // ============================================================
 
 const express = require('express');
@@ -13,7 +15,7 @@ const router = express.Router();
 const bcryptjs = require('bcryptjs');
 const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
-const { requireAuth, requireRole } = require('../middleware');
+const { requireAuth, requireWachfuehrer } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
@@ -22,31 +24,28 @@ const TEAM_ROLES = ['WACHGAENGER', 'BOOTSFUEHRER'];
 const MIN_PASSWORD_LENGTH = 10;
 
 router.use(requireAuth);
-// Nur Wachführer (HAUPTWACHE wird von requireRole ebenfalls durchgelassen, hat aber
-// i. d. R. keinen Turm – die Turm-Pflicht unten greift dann und liefert 400).
-router.use(requireRole('WACHFUEHRER'));
+router.use(requireWachfuehrer); // strikt Wachführer (Admin nutzt /api/admin)
 
-// Eigener Turm ist Pflicht: ohne tower_id kann nicht wachenscharf verwaltet werden.
-function requireOwnTower(req, res) {
-  if (!req.user.tower_id) {
-    res.status(400).json({ error: 'Diesem Konto ist keine Wache (Turm) zugeordnet.' });
-    return null;
-  }
-  return req.user.tower_id;
+// Optionale Stationierung: tower_id muss – falls gesetzt – ein eigener Turm sein.
+async function ownTowerOrNull(req, towerId) {
+  if (!towerId) return { ok: true, value: null };
+  const id = parsePositiveInt(towerId);
+  if (!id) return { ok: false };
+  const tower = await dbGet('SELECT owner_id FROM towers WHERE id = ?', [id]);
+  if (!tower || tower.owner_id !== req.user.id) return { ok: false };
+  return { ok: true, value: id };
 }
 
-// GET /api/team/members – Wachpersonal der eigenen Wache
+// GET /api/team/members – Wachpersonal des eigenen Scopes (owner_id === ich)
 router.get('/members', async (req, res) => {
-  const towerId = requireOwnTower(req, res);
-  if (towerId === null) return;
   try {
     const members = await dbAll(
       `SELECT u.id, u.username, u.full_name, u.role, u.tower_id, u.is_active, u.last_login, u.created_at,
               t.name AS tower_name
          FROM users u LEFT JOIN towers t ON t.id = u.tower_id
-        WHERE u.tower_id = ? AND u.role IN ('WACHGAENGER', 'BOOTSFUEHRER')
+        WHERE u.owner_id = ? AND u.role IN ('WACHGAENGER', 'BOOTSFUEHRER')
         ORDER BY u.username`,
-      [towerId]
+      [req.user.id]
     );
     res.json({
       users: members.map(u => ({
@@ -64,21 +63,21 @@ router.get('/members', async (req, res) => {
 
 // POST /api/team/members – Wachgänger/Bootsführer für die eigene Wache anlegen
 router.post('/members', express.json(), async (req, res) => {
-  const towerId = requireOwnTower(req, res);
-  if (towerId === null) return;
   try {
-    const { username, password, fullName, role } = req.body;
+    const { username, password, fullName, role, towerId } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username und Passwort erforderlich' });
     if (password.length < MIN_PASSWORD_LENGTH) return res.status(400).json({ error: `Passwort muss mindestens ${MIN_PASSWORD_LENGTH} Zeichen haben` });
     const userRole = TEAM_ROLES.includes(role) ? role : 'WACHGAENGER';
+    const tower = await ownTowerOrNull(req, towerId);
+    if (!tower.ok) return res.status(400).json({ error: 'Turm gehört nicht zur eigenen Wache' });
 
     const hash = await bcryptjs.hash(password, 10);
-    // tower_id wird ZWINGEND auf die eigene Wache gesetzt; is_admin immer 0.
+    // owner_id wird ZWINGEND auf den anlegenden Wachführer gesetzt; is_admin immer 0.
     const result = await dbRun(
-      'INSERT INTO users (username, password_hash, full_name, role, tower_id, is_admin) VALUES (?, ?, ?, ?, ?, 0)',
-      [username, hash, fullName || null, userRole, towerId]
+      'INSERT INTO users (username, password_hash, full_name, role, tower_id, owner_id, is_admin) VALUES (?, ?, ?, ?, ?, ?, 0)',
+      [username, hash, fullName || null, userRole, tower.value, req.user.id]
     );
-    await recordAudit(req, 'team_user_create', 'user', result.lastID, { username, role: userRole, towerId });
+    await recordAudit(req, 'team_user_create', 'user', result.lastID, { username, role: userRole });
     broadcast('users-updated');
     res.status(201).json({ id: result.lastID, message: 'User created' });
   } catch (error) {
@@ -90,17 +89,16 @@ router.post('/members', express.json(), async (req, res) => {
   }
 });
 
-// Lädt ein Team-Mitglied NUR, wenn es zur eigenen Wache gehört und eine Team-Rolle hat.
+// Lädt ein Team-Mitglied NUR, wenn es zum eigenen Scope gehört und eine Team-Rolle hat.
 async function loadOwnMember(req, id) {
   const user = await dbGet('SELECT * FROM users WHERE id = ?', [id]);
   if (!user) return { error: 404 };
-  if (user.tower_id !== req.user.tower_id || !TEAM_ROLES.includes(user.role)) return { error: 403 };
+  if (user.owner_id !== req.user.id || !TEAM_ROLES.includes(user.role)) return { error: 403 };
   return { user };
 }
 
-// PATCH /api/team/members/:id – Name/Rolle/Aktiv-Status (gescoped)
+// PATCH /api/team/members/:id – Name/Rolle/Aktiv-Status/Stationierung (gescoped)
 router.patch('/members/:id', express.json(), async (req, res) => {
-  if (requireOwnTower(req, res) === null) return;
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
@@ -108,13 +106,19 @@ router.patch('/members/:id', express.json(), async (req, res) => {
     if (error === 404) return res.status(404).json({ error: 'User not found' });
     if (error === 403) return res.status(403).json({ error: 'Kein Mitglied der eigenen Wache' });
 
-    const { fullName, role, isActive } = req.body;
+    const { fullName, role, isActive, towerId } = req.body;
     const userRole = role !== undefined ? (TEAM_ROLES.includes(role) ? role : user.role) : user.role;
     const active = isActive !== undefined ? (isActive ? 1 : 0) : user.is_active;
+    let towerVal = user.tower_id;
+    if (towerId !== undefined) {
+      const tower = await ownTowerOrNull(req, towerId);
+      if (!tower.ok) return res.status(400).json({ error: 'Turm gehört nicht zur eigenen Wache' });
+      towerVal = tower.value;
+    }
 
     await dbRun(
-      'UPDATE users SET full_name = ?, role = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [fullName !== undefined ? (fullName || null) : user.full_name, userRole, active, id]
+      'UPDATE users SET full_name = ?, role = ?, is_active = ?, tower_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [fullName !== undefined ? (fullName || null) : user.full_name, userRole, active, towerVal, id]
     );
     await recordAudit(req, 'team_user_update', 'user', id);
     broadcast('users-updated');
@@ -127,7 +131,6 @@ router.patch('/members/:id', express.json(), async (req, res) => {
 
 // POST /api/team/members/:id/reset-password (gescoped)
 router.post('/members/:id/reset-password', express.json(), async (req, res) => {
-  if (requireOwnTower(req, res) === null) return;
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });
@@ -151,7 +154,6 @@ router.post('/members/:id/reset-password', express.json(), async (req, res) => {
 
 // DELETE /api/team/members/:id (gescoped)
 router.delete('/members/:id', async (req, res) => {
-  if (requireOwnTower(req, res) === null) return;
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Benutzer-ID' });

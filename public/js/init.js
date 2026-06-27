@@ -10,6 +10,9 @@ async function onAuthenticated() {
 
   renderUserHeader();
   initMap();
+  // Karten-Werkzeuge (Turm/Boot anlegen) nur für den Wachführer einblenden.
+  const mapTools = document.getElementById('map-tools');
+  if (mapTools) mapTools.classList.toggle('hidden', !isWachfuehrer());
   // Map braucht nach dem Einblenden ein invalidateSize, sonst grauer Bereich.
   setTimeout(() => { if (_map) _map.invalidateSize(); }, 100);
 
@@ -72,6 +75,21 @@ function wireEvents() {
   document.getElementById('btn-new-user').onclick = () => openUserModal(null);
   document.getElementById('user-modal-cancel').onclick = () => closeModal('user-modal');
   document.getElementById('user-modal-save').onclick = saveUser;
+
+  // Turm-/Boot-Verwaltung (Wachführer)
+  document.getElementById('btn-add-tower').onclick = () => setAddTowerMode(!_addTowerMode);
+  document.getElementById('btn-add-boat').onclick = () => openBoatModal(null);
+  document.getElementById('btn-new-tower').onclick = () => openTowerModal(null);
+  document.getElementById('btn-new-boat').onclick = () => openBoatModal(null);
+  document.getElementById('tower-modal-cancel').onclick = () => closeModal('tower-modal');
+  document.getElementById('tower-modal-save').onclick = saveTower;
+  document.getElementById('boat-modal-cancel').onclick = () => closeModal('boat-modal');
+  document.getElementById('boat-modal-save').onclick = saveBoat;
+
+  // Demo-Konfiguration (Vorlagen-Türme, Admin)
+  document.getElementById('btn-new-template').onclick = () => openTemplateModal(null);
+  document.getElementById('template-modal-cancel').onclick = () => closeModal('template-modal');
+  document.getElementById('template-modal-save').onclick = saveTemplate;
 
   // Klick auf Modal-Hintergrund schließt
   document.querySelectorAll('.modal').forEach(m => {

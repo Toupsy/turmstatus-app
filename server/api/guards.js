@@ -1,12 +1,16 @@
 // ============================================================
-// Wachgänger-API – Lageobjekte, Status & Position
+// Wachgänger-API – Lageobjekte, Status & Position (Wachführer, scoped)
+//
+// Mandanten-Modell (Scope-Isolation): Jeder Wachgänger (Lageobjekt) gehört genau
+// EINEM Wachführer (owner_id) und kann nur dessen eigenen Türmen zugeordnet werden.
+// Admin sieht alle (read-only).
 // ============================================================
 
 const express = require('express');
 const router = express.Router();
 const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
-const { requireAuth, requireRole } = require('../middleware');
+const { requireAuth, requireWachfuehrer, viewScope } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
@@ -14,20 +18,30 @@ const GUARD_STATUS = ['IN_AREA', 'MINUS_ONE', 'DEPLOYED', 'BREAK'];
 
 router.use(requireAuth);
 
-// GET /api/guards – alle Wachgänger (gemeinsames Lagebild)
+// Prüft, ob ein Turm dem Wachführer gehört. towerId null = ok.
+async function ownTowerOrNull(req, towerId) {
+  if (!towerId) return { ok: true, value: null };
+  const id = parsePositiveInt(towerId);
+  if (!id) return { ok: false };
+  const tower = await dbGet('SELECT owner_id FROM towers WHERE id = ?', [id]);
+  if (!tower || tower.owner_id !== req.user.id) return { ok: false };
+  return { ok: true, value: id };
+}
+
+// GET /api/guards – Wachgänger des eigenen Scopes (Admin: alle)
 router.get('/', async (req, res) => {
   try {
-    const guards = await dbAll(
-      `SELECT g.*, t.name AS tower_name
-         FROM guards g LEFT JOIN towers t ON t.id = g.tower_id
-        ORDER BY g.name`
-    );
+    const scope = viewScope(req.user);
+    const guards = scope.all
+      ? await dbAll(`SELECT g.*, t.name AS tower_name FROM guards g LEFT JOIN towers t ON t.id = g.tower_id ORDER BY g.name`)
+      : await dbAll(`SELECT g.*, t.name AS tower_name FROM guards g LEFT JOIN towers t ON t.id = g.tower_id WHERE g.owner_id = ? ORDER BY g.name`, [scope.scopeId]);
     res.json({
       guards: guards.map(g => ({
         id: g.id,
         userId: g.user_id,
         towerId: g.tower_id,
         towerName: g.tower_name,
+        ownerId: g.owner_id,
         name: g.name,
         status: g.status,
         latitude: g.latitude,
@@ -41,15 +55,18 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/guards – Wachgänger anlegen [HAUPTWACHE]
-router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => {
+// POST /api/guards – Wachgänger anlegen [WACHFUEHRER] (owner_id = anlegender Wachführer)
+router.post('/', requireWachfuehrer, express.json(), async (req, res) => {
   try {
     const { name, towerId, userId, latitude, longitude } = req.body;
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'Name erforderlich' });
 
+    const tower = await ownTowerOrNull(req, towerId);
+    if (!tower.ok) return res.status(400).json({ error: 'Turm gehört nicht zur eigenen Wache' });
+
     const result = await dbRun(
-      'INSERT INTO guards (name, tower_id, user_id, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
-      [name, towerId ? parsePositiveInt(towerId) : null, userId ? parsePositiveInt(userId) : null, latitude ?? null, longitude ?? null]
+      'INSERT INTO guards (name, tower_id, user_id, latitude, longitude, owner_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, tower.value, userId ? parsePositiveInt(userId) : null, latitude ?? null, longitude ?? null, req.user.id]
     );
     await recordAudit(req, 'guard_create', 'guard', result.lastID, { name });
     broadcast('guards-updated');
@@ -61,10 +78,10 @@ router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => 
 });
 
 // Hilfsfunktion: darf der aktuelle User diesen Wachgänger ändern?
+// Der eigene Wachführer (owner) oder der verknüpfte Wachgänger selbst. Admin: NEIN (read-only).
 function canModifyGuard(user, guard) {
-  if (user.role === 'HAUPTWACHE') return true;
-  if (user.role === 'WACHFUEHRER' && guard.tower_id === user.tower_id) return true;
-  if (guard.user_id && guard.user_id === user.id) return true; // eigener Wachgänger
+  if (user.role === 'WACHFUEHRER' && guard.owner_id === user.id) return true;
+  if (guard.user_id && guard.user_id === user.id) return true;
   return false;
 }
 
@@ -115,13 +132,14 @@ router.patch('/:id/position', express.json(), async (req, res) => {
   }
 });
 
-// DELETE /api/guards/:id [HAUPTWACHE]
-router.delete('/:id', requireRole('HAUPTWACHE'), async (req, res) => {
+// DELETE /api/guards/:id [WACHFUEHRER, nur eigener Wachgänger]
+router.delete('/:id', requireWachfuehrer, async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Wachgänger-ID' });
-    const guard = await dbGet('SELECT id FROM guards WHERE id = ?', [id]);
+    const guard = await dbGet('SELECT id, owner_id FROM guards WHERE id = ?', [id]);
     if (!guard) return res.status(404).json({ error: 'Guard not found' });
+    if (guard.owner_id !== req.user.id) return res.status(403).json({ error: 'Kein eigener Wachgänger' });
 
     await dbRun('DELETE FROM guards WHERE id = ?', [id]);
     await recordAudit(req, 'guard_delete', 'guard', id);

@@ -12,12 +12,14 @@ let boats = [];              // [{ id, name, callSign, towerId, towerName, statu
 let requests = [];           // [{ id, guardId, guardName, reason, note, status, ... }]
 let users = [];              // (Admin/Wachführer) [{ id, username, role, ... }]
 let controlTrips = [];       // [{ id, boatId, boatName, status, ... }] Kontrollfahrt-Anfragen
+let towerTemplates = [];     // (Admin) Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
 
 let activeTab = 'map';       // aktueller Tab
 
 // Leaflet-Map-Objekte (in map.js gesetzt)
 let _map = null;
 let _markerLayer = null;
+let _addTowerMode = false;   // true: nächster Karten-Klick legt einen Turm an (Wachführer)
 
 // Rollen-Helfer
 const isHauptwache = () => currentUser && currentUser.role === 'HAUPTWACHE';

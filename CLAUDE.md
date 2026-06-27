@@ -45,7 +45,7 @@ server.js          Express (Port 3002), Static aus ../public, Route-Registration
 admin-server.js    createAdminApp({sessionMiddleware}) (vom Haupt-Prozess auf ADMIN_PORT eingebettet) + Standalone-Start (require.main-Guard, eigene DB)
 realtime.js        WebSocket-Server (/api/ws): broadcast(type) an ALLE Clients (gemeinsames Lagebild)
 status.js          Reine Statuslogik: deriveTowerStatus() (DOM-/DB-frei, testbar)
-middleware.js      requireAuth (lädt req.user inkl. Rolle) + requireRole(...) (HAUPTWACHE darf alles)
+middleware.js      requireAuth (lädt req.user inkl. Rolle + owner_id) + requireRole(...) (HAUPTWACHE darf alles) + requireWachfuehrer (striktes WF-Gate OHNE Admin-Bypass) + viewScope(user)/isAdmin (Mandanten-Isolation)
 http-common.js     Geteilte HTTP-Bausteine: securityHeaders, trustProxyValue (TRUST_PROXY-Env), overrideClientIp (req.ip aus CF-Connecting-IP/X-Forwarded-For – Audit+Rate-Limit; fälschbar ohne Origin-Lockdown), 404/Error/Signal-Handler
 config.json        Enums/Labels (Rollen, Status, Gründe) + Map-Defaults → GET /api/config
 db/connection.js   Zentrale SQLite-Verbindung: getDb()/dbRun/dbGet/dbAll/dbPath
@@ -56,25 +56,25 @@ db/session.js      createSessionMiddleware (SQLite-Store, DRY für beide Server)
 db/ids.js          parsePositiveInt (strikte ID-Validierung, kein '5abc'→5)
 db/audit.js        recordAudit(req, action, ...) → audit_log
 api/auth.js        login/logout/me/init/needs-setup/registration/register/password + Brute-Force-Schutz
-api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD [HAUPTWACHE | WACHFUEHRER(eigener)]
-api/guards.js      Wachgänger: Liste, CRUD, Status/Position
-api/boats.js       Boote: Liste, CRUD, Status/Position
-api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr
-api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → WACHFUEHRER(eigene Wache) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
-api/dashboard.js   GET /summary – Lage-Kennzahlen
-api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers (Haupt- UND Admin-Server)
-api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng auf eigene Wache (tower_id) gescoped
+api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD + Kartenposition – owner-scoped (nur eigene Türme); Admin sieht alle (read-only). POST/PATCH/DELETE: requireWachfuehrer
+api/guards.js      Wachgänger: Liste, CRUD, Status/Position – owner-scoped (nur eigene)
+api/boats.js       Boote: Liste, CRUD, Status/Position, Turm-Zuordnung – owner-scoped (nur eigene); Turm muss eigener sein
+api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr; owner-scoped (Owner-WF entscheidet)
+api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → Owner-WF (dem das Boot gehört) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
+api/dashboard.js   GET /summary – Lage-Kennzahlen (owner-scoped; Admin: alle)
+api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers + Demo-Konfiguration (tower_templates CRUD; bei WF-Anlage als Start-Türme in dessen Scope geklont)
+api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng über users.owner_id gescoped (Mandant = Wachführer)
 ```
 **Pfad-Konvention:** `server/*` → `../public`/`../data`; `server/db/*` → `../../data`.
 
 **Frontend `public/js/`** — Ladereihenfolge in `Turmstatus.html` beachten:
 ```
-state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
+state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map, _addTowerMode); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
 utils.js   escapeHtml, showToast, fmtTime, labelOf, statusPill, openModal/closeModal
 api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON)
 auth.js    Login/Setup/Register-Modal + User-Header + Passwortwechsel
-map.js     Leaflet-Karte: initMap(), renderMap() (Türme farbcodiert, Wachgänger/Boote als Marker)
-views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1-Aktionen + Kontrollfahrt-Aktionen; Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
+map.js     Leaflet-Karte: initMap(), renderMap(); Wachführer: Türme als verschiebbare Marker (Drag→PATCH) + „Turm auf Karte setzen" (Klick→Modal); sonst farbcodierte circleMarker
+views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1- & Kontrollfahrt-Aktionen + Turm-/Boot-Verwaltung (Wachführer: anlegen/bearbeiten/löschen, Boot↔Turm-Zuordnung); Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
 ws.js      WebSocket-Client (/api/ws) → Refresh je Event + 30-s-Polling-Fallback
 init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung; Event-Listener
 ```
@@ -86,10 +86,11 @@ init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung
 ## Datenmodell (SQLite, `db/schema.sql`)
 ```
 users   id, username, password_hash, full_name, role[HAUPTWACHE|WACHFUEHRER|WACHGAENGER|BOOTSFUEHRER],
-        tower_id(FK), is_admin, is_active, last_login, created_at, updated_at
-towers  id, name, call_sign, latitude, longitude, required_staff, created_at
-guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, updated_at
-boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], lat, lng, updated_at
+        tower_id(FK, informative Stationierung), owner_id(FK→users, Mandant: Wachführer dieses Personals), is_admin, is_active, last_login, created_at, updated_at
+towers  id, name, call_sign, latitude, longitude, required_staff, owner_id(FK→users, Eigentümer-Wachführer), created_at
+tower_templates  id, name, call_sign, latitude, longitude, required_staff, created_at  (Demo-Konfiguration: Admin-gepflegt, bei WF-Anlage in towers(owner_id) kopiert)
+guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, owner_id(FK→users), updated_at
+boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], lat, lng, owner_id(FK→users), updated_at
 minus_one_requests  id, guard_id(FK), requested_by(FK), reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER],
                     note, status[PENDING|APPROVED|REJECTED|RETURNED], rejection_reason,
                     created_at, decided_at, decided_by(FK), returned_at
@@ -99,21 +100,29 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 ```
 **Turmfarbe (`status.js`):** besetzt = Wachgänger mit Status `IN_AREA`.
 `GREEN` ≥ Sollstärke, `YELLOW` ≥ 50 %, sonst `RED`.
-**Rollen serverseitig erzwungen** (`middleware.js` + endpunktspezifische Gates):
-- **App-Admin** (`is_admin`, Rolle HAUPTWACHE): Account-Verwaltung (legt Wachführer an) + **reine Ansicht**.
-  Hat **KEINE** operativen Bestätigungsrechte – -1- und Kontrollfahrt-Genehmigung sind ihm verwehrt
-  (eigene Gates in `requests.js`/`control-trips.js`, NICHT über `requireRole` mit HAUPTWACHE-Bypass).
-- **Wachführer**: sieht alles; **genehmigt/lehnt ab** (-1 + Kontrollfahrten) **nur für die eigene Wache**
-  (Turm-Match); verwaltet eigenes Personal (Turm).
-- **Wachgänger**: sieht alles; darf nur **-1 beantragen**.
+**Mandanten-Modell (Scope-Isolation – wie Wachplan-Generator):** Jeder **Wachführer ist ein
+eigener Mandant**. Jedes Domänenobjekt (Turm/Boot/Wachgänger) und jedes Personal-Konto trägt
+`owner_id` = der besitzende Wachführer. Ein Wachführer **sieht/verwaltet/genehmigt nur sein
+Eigenes**; fremde WF-Scopes sind unsichtbar. Zentrale Helfer in `middleware.js`:
+`viewScope(user)` (Admin → `{all:true}`; WF → eigene `id`; WG/BF → `owner_id` ihres WF),
+`requireWachfuehrer` (WF-Gate **ohne** Admin-Bypass), `isAdmin`. **Rollen serverseitig erzwungen:**
+- **App-Admin** (`is_admin`, Rolle HAUPTWACHE): Account-Verwaltung (legt Wachführer an) + **reine
+  Ansicht über ALLE Mandanten**. **KEINE** operativen/verwaltenden Rechte (kein Anlegen/Ändern/
+  Löschen/Genehmigen) – nutzt nicht `requireRole`-Bypass, sondern `requireWachfuehrer`/Owner-Gates.
+- **Wachführer**: verwaltet **nur seinen eigenen Scope** – legt **Türme** an, **positioniert** sie
+  (Klick/Drag), löscht sie; legt **Boote** an und ordnet sie **eigenen** Türmen zu; legt eigenes
+  **Personal** (Wachgänger/Bootsführer) an; **genehmigt/lehnt** -1 + Kontrollfahrten **nur für
+  eigene** Wachgänger/Boote (Owner-Match).
+- **Wachgänger**: sieht **nur den Scope seines Wachführers**; darf nur **-1 beantragen**.
 - **Bootsführer**: wie Wachgänger + darf **Kontrollfahrten beantragen**.
 
-> **Falle:** `requireRole(...)` lässt HAUPTWACHE immer durch („darf alles"). Für die Genehmigungs-
-> Endpunkte ist das bewusst NICHT genutzt – stattdessen prüfen `loadDecidableRequest()` /
-> `loadDecidable()` explizit `role==='WACHFUEHRER' && tower_id===<Wache der Anfrage>`. Wer einen
-> neuen operativen Bestätigungs-Endpunkt baut, darf den Admin NICHT per `requireRole` durchlassen.
+> **Falle:** `requireRole(...)` lässt HAUPTWACHE immer durch („darf alles"). Für **alle operativen
+> und verwaltenden** Endpunkte (Türme/Boote/Wachgänger/Personal-CRUD + Genehmigungen) ist das
+> bewusst NICHT genutzt – stattdessen `requireWachfuehrer` (kein Admin-Bypass) + Owner-Prüfung
+> (`owner_id === req.user.id` bzw. `viewScope`). Wer einen neuen operativen/verwaltenden Endpunkt
+> baut, darf den Admin NICHT per `requireRole` durchlassen und MUSS nach `owner_id` filtern/prüfen.
 
-**Konten-Hierarchie (Account-Anlage):** Der **App-Admin** (`is_admin`, technischer Administrator – NICHT „die Hauptwache", die liegt extern) legt über `/api/admin/*` v. a. **Wachführer** an und weist ihnen ihre Wache (`tower_id`) zu. **Wachführer** legen über `/api/team/*` das **eigene** Wachpersonal (Wachgänger/Bootsführer) an – `tower_id` wird serverseitig auf die eigene Wache erzwungen, sodass kein Wachführer in eine fremde Wache eingreifen kann. Es muss nicht jeder Wachgänger ein eigenes Konto haben (ein gemeinsames Konto pro Wache genügt, ist aber nicht erzwungen).
+**Konten-Hierarchie (Account-Anlage):** Der **App-Admin** (`is_admin`, technischer Administrator – NICHT „die Hauptwache", die liegt extern) legt über `/api/admin/*` v. a. **Wachführer** an. **Wachführer** legen über `/api/team/*` das **eigene** Wachpersonal (Wachgänger/Bootsführer) an – `owner_id` wird serverseitig zwingend auf den anlegenden Wachführer gesetzt, sodass kein Wachführer in einen fremden Scope eingreifen kann. Es muss nicht jeder Wachgänger ein eigenes Konto haben (ein gemeinsames Konto pro Wache genügt, ist aber nicht erzwungen).
 **Hinweis (NOCH OFFEN):** „Hauptwache" als von der App-Admin-Rolle getrennte, externe Instanz ist konzeptionell gewünscht, aber noch nicht modelliert – aktuell ist `role=HAUPTWACHE` + `is_admin=1` der App-Admin. Kontrollfahrt-Folgelogik (Boot-Status etc.) folgt später.
 
 ---

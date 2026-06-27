@@ -9,6 +9,55 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Demo-Konfiguration: Vorlagen-Türme für neue Wachführer)
+- Neue Tabelle **`tower_templates`** (`db/schema.sql`, via `CREATE TABLE IF NOT EXISTS` auch auf
+  Bestands-DBs). Der **App-Admin** pflegt darüber eine **Demo-Konfiguration** von Türmen.
+- **Vererbung:** Beim Anlegen eines **neuen Wachführer-Kontos** (`POST /api/admin/users`,
+  role=WACHFUEHRER) werden alle Vorlagen-Türme via `applyTowerTemplates()` als Start-Türme in
+  den Scope des neuen WF kopiert (`towers.owner_id = neuer WF`). Bereits bestehende WF bleiben
+  unberührt.
+- **API (admin-gated):** `GET/POST/PATCH/DELETE /api/admin/tower-templates` in `api/admin.js`.
+- **UI:** Panel „Demo-Konfiguration · Türme" im Verwaltung-Tab (nur Admin) + Vorlagen-Modal
+  (`Turmstatus.html`, `views.js`: `renderTowerTemplates`/`openTemplateModal`/`saveTemplate`/
+  `deleteTemplate`, `state.js:towerTemplates`, `init.js`).
+- **Tests:** Vorlagen-CRUD admin-only (WF → 403) + neuer WF erbt Vorlage; `npm test` → **28/28 grün**.
+
+## Zuletzt (Mandanten-Modell: vollständige Scope-Isolation pro Wachführer + Karte auf Dahme)
+**Vom Nutzer bestätigte Zielarchitektur** (deckungsgleich zum Wachplan-Generator, wo jeder
+Wachführer-Account nur seine eigenen Daten verwaltet): **Jeder Wachführer ist ein eigener
+Mandant.** Er **sieht, verwaltet und genehmigt ausschließlich sein Eigenes** – andere
+Wachführer-Scopes sind für ihn komplett unsichtbar. Der App-Admin legt Wachführer an und
+**sieht alles read-only** (Einblick in jedes WF-Panel). *(Eine frühere Zwischenversion hatte
+die Verwaltung „stationsweit" gemacht – das wurde wieder ersetzt.)*
+
+- **Scope-Isolation (`owner_id`):** Neue Spalte **`owner_id`** auf `towers`/`guards`/`boats`
+  (= Wachführer, dem das Objekt gehört) und auf **`users`** (= Wachführer, dem ein
+  Personal-Konto gehört). Schema (`db/schema.sql`) + idempotente Migrationen (`db/init.js`).
+  Neuer Helfer `middleware.js`: `viewScope(user)` (Admin → alle; WF → eigene `id`;
+  Wachgänger/Bootsführer → `owner_id` ihres WF), `requireWachfuehrer` (striktes WF-Gate **ohne**
+  HAUPTWACHE-Bypass → Admin echt view-only), `isAdmin`.
+- **Alle Router gescoped:** `towers`/`guards`/`boats`/`requests`/`control-trips`/`team`/`dashboard`
+  filtern GET nach Scope; Schreib-/Genehmigungsrechte sind an den **Owner** gebunden
+  (Turm/Boot/Wachgänger gehört dem WF). `requests`/`control-trips` genehmigt nur der **Owner-WF**
+  (Turm-Match durch Owner-Match ersetzt). `team` scoped Personal über `users.owner_id` statt
+  `tower_id`. Antworten liefern `ownerId` mit.
+- **Türme/Boote-Verwaltung (DIVERA-artig, WF-only):** „📍 Turm auf Karte setzen" (Klick → Modal
+  mit Position), **verschiebbare** Turm-Marker (Drag → PATCH), Turm-/Boot-Modals + Tabellen-
+  Aktionen, **Boot↔Turm-Zuordnung**. Karten-Marker/Tabellen-Editoren nur für den WF; Admin nur Ansicht.
+- **Geo:** Kartenzentrum auf **DLRG Hauptwache Dahme** (`54.21449, 11.08967`, Zoom 15) in
+  `server/config.json` + Fallback in `public/js/map.js`. **Kein Demo-Seed mehr** für Türme/Boote
+  (ownerlose Seeds wären für keinen WF sichtbar) – jeder WF legt seine Objekte selbst an.
+- **Admin-Profil:** „Profil ansehen" zeigt den **gesamten Scope** eines WF (alle seine
+  Türme/Boote/Wachgänger), clientseitig per `ownerId === WF.id` gefiltert.
+- **Rollen-Anlage:** Admin legt **Wachführer** an; Wachführer legt nur **Wachgänger + Bootsführer**
+  an (kein „Turmführer").
+- **Tests:** `api.test.js` komplett auf Isolation umgeschrieben (WF1 baut Scope; WF2 sieht/ändert
+  nichts davon → 403/400/leer; -1- & Kontrollfahrt nur durch Owner-WF; Admin sieht alle).
+  `npm test` → **27/27 grün**.
+- **Offen/Folge:** Admin-API (`/api/admin/*`) legt Personal weiterhin ohne `owner_id` an (Admin
+  legt v. a. Wachführer an – Personal kommt über den WF). `users.tower_id` ist jetzt nur noch
+  informative Stationierung (Scope läuft über `owner_id`).
+
 ## Zuletzt (Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen)
 - Neuer gemeinsamer `server/http-common.js` mit `trustProxyValue()`, `overrideClientIp()`,
   `clientIpFromHeaders()`, Security-Headern und gemeinsamen 404/Error/SIGTERM-Handlern.

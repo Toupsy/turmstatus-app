@@ -38,6 +38,10 @@ async function refreshAdmin() {
     users = (await apiGet('/api/admin/users')).users;
     renderUsers();
     try {
+      towerTemplates = (await apiGet('/api/admin/tower-templates')).templates;
+      renderTowerTemplates();
+    } catch (e) { /* ignore */ }
+    try {
       const a = await apiGet('/api/admin/audit-log?limit=200');
       renderAudit(a.entries);
     } catch (e) { /* ignore */ }
@@ -79,16 +83,95 @@ function renderSummary(s) {
 
 // ── Türme ────────────────────────────────────────────────────
 function renderTowers() {
+  // Türme verwaltet der Wachführer (anlegen/positionieren/löschen); Admin = Ansicht.
+  const canEdit = isWachfuehrer();
+  const addBtn = document.getElementById('btn-new-tower');
+  if (addBtn) addBtn.style.display = canEdit ? '' : 'none';
+
   if (!towers.length) { document.getElementById('tower-table').innerHTML = '<p class="muted">Keine Türme.</p>'; return; }
-  const rows = towers.map(t => `
+  const rows = towers.map(t => {
+    const pos = (t.latitude != null && t.longitude != null)
+      ? `${t.latitude.toFixed(4)}, ${t.longitude.toFixed(4)}` : '<span class="muted">nicht gesetzt</span>';
+    const actions = canEdit
+      ? `<button onclick="openTowerById(${t.id})">Bearbeiten</button>
+         <button class="danger" onclick="deleteTower(${t.id})">Löschen</button>` : '';
+    return `
     <tr>
       <td>${escapeHtml(t.name)}</td>
       <td>${escapeHtml(t.callSign || '–')}</td>
       <td>${t.currentStaff}/${t.requiredStaff}</td>
       <td>${statusPill('towerStatus', t.status)}</td>
-    </tr>`).join('');
+      <td>${pos}</td>
+      ${canEdit ? `<td class="row-actions">${actions}</td>` : ''}
+    </tr>`; }).join('');
   document.getElementById('tower-table').innerHTML =
-    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Besetzung</th><th>Status</th><th>Position</th>${canEdit ? '<th>Aktion</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Turm-Verwaltung (Wachführer) ─────────────────────────────
+// openTowerModal(null) = neu (optional mit lat/lng aus Karten-Klick); mit Objekt = bearbeiten.
+function openTowerModal(tower, lat, lng) {
+  document.getElementById('tower-modal-error').textContent = '';
+  const posHint = document.getElementById('tower-modal-pos-hint');
+  if (tower && tower.id) {
+    document.getElementById('tower-modal-title').textContent = 'Turm bearbeiten';
+    document.getElementById('tower-modal-id').value = tower.id;
+    document.getElementById('tower-modal-name').value = tower.name || '';
+    document.getElementById('tower-modal-callsign').value = tower.callSign || '';
+    document.getElementById('tower-modal-staff').value = tower.requiredStaff || 2;
+    document.getElementById('tower-modal-lat').value = tower.latitude != null ? tower.latitude : '';
+    document.getElementById('tower-modal-lng').value = tower.longitude != null ? tower.longitude : '';
+    if (posHint) posHint.style.display = 'none';
+  } else {
+    document.getElementById('tower-modal-title').textContent = 'Turm anlegen';
+    document.getElementById('tower-modal-id').value = '';
+    document.getElementById('tower-modal-name').value = '';
+    document.getElementById('tower-modal-callsign').value = '';
+    document.getElementById('tower-modal-staff').value = 2;
+    document.getElementById('tower-modal-lat').value = lat != null ? lat.toFixed(5) : '';
+    document.getElementById('tower-modal-lng').value = lng != null ? lng.toFixed(5) : '';
+    if (posHint) posHint.style.display = (lat != null) ? 'block' : 'none';
+  }
+  openModal('tower-modal');
+}
+
+function openTowerById(id) {
+  const t = towers.find(x => x.id === id);
+  if (t) openTowerModal(t);
+}
+
+async function saveTower() {
+  const id = document.getElementById('tower-modal-id').value;
+  const errEl = document.getElementById('tower-modal-error');
+  const name = document.getElementById('tower-modal-name').value.trim();
+  if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
+  const latRaw = document.getElementById('tower-modal-lat').value;
+  const lngRaw = document.getElementById('tower-modal-lng').value;
+  const payload = {
+    name,
+    callSign: document.getElementById('tower-modal-callsign').value.trim() || null,
+    requiredStaff: Number(document.getElementById('tower-modal-staff').value) || 2,
+    latitude: latRaw === '' ? null : Number(latRaw),
+    longitude: lngRaw === '' ? null : Number(lngRaw)
+  };
+  try {
+    if (id) await apiPatch('/api/towers/' + id, payload);
+    else await apiPost('/api/towers', payload);
+    closeModal('tower-modal');
+    showToast('Turm gespeichert');
+  } catch (err) { errEl.textContent = err.message; }
+}
+
+// Position nach Drag des Karten-Markers speichern.
+async function moveTower(id, lat, lng) {
+  try { await apiPatch('/api/towers/' + id, { latitude: lat, longitude: lng }); showToast('Turm verschoben'); }
+  catch (err) { showToast(err.message); refreshTowers(); }
+}
+
+async function deleteTower(id) {
+  if (!confirm('Turm wirklich löschen?')) return;
+  try { await apiDelete('/api/towers/' + id); showToast('Turm gelöscht'); }
+  catch (err) { showToast(err.message); }
 }
 
 // ── Wachgänger ───────────────────────────────────────────────
@@ -123,30 +206,111 @@ function approvedRequestForGuard(guardId) {
 
 // ── Boote ────────────────────────────────────────────────────
 function renderBoats() {
-  if (!boats.length) { document.getElementById('boat-table').innerHTML = '<p class="muted">Keine Boote.</p>'; return; }
-  // Boot-Status setzt der Wachführer (operativ); der App-Admin nur Ansicht.
+  // Boote verwaltet der Wachführer (anlegen/Status/Turm-Zuordnung/löschen); Admin = Ansicht.
   const canEdit = isWachfuehrer();
+  const addBtn = document.getElementById('btn-new-boat');
+  if (addBtn) addBtn.style.display = canEdit ? '' : 'none';
+
+  if (!boats.length) { document.getElementById('boat-table').innerHTML = '<p class="muted">Keine Boote.</p>'; return; }
   const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
   const rows = boats.map(b => {
+    const towerCell = canEdit
+      ? `<select onchange="setBoatTower(${b.id}, this.value)" style="width:auto">` +
+        `<option value="">– kein Turm –</option>` +
+        towers.map(t => `<option value="${t.id}" ${b.towerId === t.id ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('') +
+        `</select>`
+      : escapeHtml(b.towerName || '–');
     const statusCell = canEdit
       ? `<select onchange="setBoatStatus(${b.id}, this.value)" style="width:auto">${statusKeys.map(k =>
           `<option value="${k}" ${b.status === k ? 'selected' : ''}>${escapeHtml(labelOf('boatStatus', k))}</option>`).join('')}</select>`
       : statusPill('boatStatus', b.status);
+    const actions = canEdit
+      ? `<button onclick="openBoatById(${b.id})">Bearbeiten</button>
+         <button class="danger" onclick="deleteBoat(${b.id})">Löschen</button>` : '';
     return `
       <tr>
         <td>${escapeHtml(b.name)}</td>
         <td>${escapeHtml(b.callSign || '–')}</td>
-        <td>${escapeHtml(b.towerName || '–')}</td>
+        <td>${towerCell}</td>
         <td>${statusCell}</td>
+        ${canEdit ? `<td class="row-actions">${actions}</td>` : ''}
       </tr>`;
   }).join('');
   document.getElementById('boat-table').innerHTML =
-    `<table><thead><tr><th>Boot</th><th>Funk</th><th>Turm</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+    `<table><thead><tr><th>Boot</th><th>Funk</th><th>Turm</th><th>Status</th>${canEdit ? '<th>Aktion</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 async function setBoatStatus(id, status) {
   try { await apiPatch('/api/boats/' + id, { status }); showToast('Boot-Status aktualisiert'); }
   catch (err) { showToast(err.message); refreshBoats(); }
+}
+
+// Boot einem Turm zuordnen (leerer Wert = kein Turm).
+async function setBoatTower(id, towerVal) {
+  const towerId = towerVal ? Number(towerVal) : null;
+  try { await apiPatch('/api/boats/' + id, { towerId }); showToast('Turm-Zuordnung aktualisiert'); }
+  catch (err) { showToast(err.message); refreshBoats(); }
+}
+
+// ── Boot-Verwaltung (Wachführer) ─────────────────────────────
+function openBoatModal(boat) {
+  document.getElementById('boat-modal-error').textContent = '';
+  // Turm-Auswahl füllen
+  const towerSel = document.getElementById('boat-modal-tower');
+  towerSel.innerHTML = '<option value="">– kein Turm –</option>' +
+    towers.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  // Status-Auswahl füllen
+  const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
+  const statusSel = document.getElementById('boat-modal-status');
+  statusSel.innerHTML = statusKeys.map(k => `<option value="${k}">${escapeHtml(labelOf('boatStatus', k))}</option>`).join('');
+
+  if (boat && boat.id) {
+    document.getElementById('boat-modal-title').textContent = 'Boot bearbeiten';
+    document.getElementById('boat-modal-id').value = boat.id;
+    document.getElementById('boat-modal-name').value = boat.name || '';
+    document.getElementById('boat-modal-callsign').value = boat.callSign || '';
+    towerSel.value = boat.towerId ? String(boat.towerId) : '';
+    statusSel.value = boat.status || 'AT_TOWER';
+  } else {
+    document.getElementById('boat-modal-title').textContent = 'Boot anlegen';
+    document.getElementById('boat-modal-id').value = '';
+    document.getElementById('boat-modal-name').value = '';
+    document.getElementById('boat-modal-callsign').value = '';
+    towerSel.value = '';
+    statusSel.value = 'AT_TOWER';
+  }
+  openModal('boat-modal');
+}
+
+function openBoatById(id) {
+  const b = boats.find(x => x.id === id);
+  if (b) openBoatModal(b);
+}
+
+async function saveBoat() {
+  const id = document.getElementById('boat-modal-id').value;
+  const errEl = document.getElementById('boat-modal-error');
+  const name = document.getElementById('boat-modal-name').value.trim();
+  if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
+  const towerVal = document.getElementById('boat-modal-tower').value;
+  const payload = {
+    name,
+    callSign: document.getElementById('boat-modal-callsign').value.trim() || null,
+    towerId: towerVal ? Number(towerVal) : null,
+    status: document.getElementById('boat-modal-status').value
+  };
+  try {
+    if (id) await apiPatch('/api/boats/' + id, payload);
+    else await apiPost('/api/boats', payload);
+    closeModal('boat-modal');
+    showToast('Boot gespeichert');
+  } catch (err) { errEl.textContent = err.message; }
+}
+
+async function deleteBoat(id) {
+  if (!confirm('Boot wirklich löschen?')) return;
+  try { await apiDelete('/api/boats/' + id); showToast('Boot gelöscht'); }
+  catch (err) { showToast(err.message); }
 }
 
 // ── Anfragen ─────────────────────────────────────────────────
@@ -160,8 +324,8 @@ function renderRequests() {
   } else {
     const rows = pending.map(r => {
       let actions = '';
-      // Entscheiden darf nur der Wachführer der eigenen Wache (Turm der Anfrage).
-      if (isWachfuehrer() && currentUser.towerId === r.towerId) {
+      // Entscheiden darf nur der Wachführer, dem der Wachgänger gehört (Scope-Owner).
+      if (isWachfuehrer() && currentUser.userId === r.ownerId) {
         actions = `<button class="ok" onclick="approveRequest(${r.id})">Genehmigen</button>
                    <button class="danger" onclick="openReject(${r.id})">Ablehnen</button>`;
       } else {
@@ -261,8 +425,8 @@ function renderControlTrips() {
   }
   const rows = controlTrips.map(c => {
     let actions = '';
-    // Entscheiden darf nur der Wachführer der eigenen Wache (Turm des Boots).
-    const canDecide = isWachfuehrer() && currentUser.towerId === c.towerId;
+    // Entscheiden darf nur der Wachführer, dem das Boot gehört (Scope-Owner).
+    const canDecide = isWachfuehrer() && currentUser.userId === c.ownerId;
     if (c.status === 'PENDING' && canDecide) {
       actions = `<button class="ok" onclick="approveControlTrip(${c.id})">Genehmigen</button>
                  <button class="danger" onclick="openRejectControlTrip(${c.id})">Ablehnen</button>`;
@@ -325,8 +489,8 @@ async function submitRejectControlTrip() {
 function renderUsers() {
   if (!users.length) { document.getElementById('user-table').innerHTML = '<p class="muted">Keine Benutzer.</p>'; return; }
   const rows = users.map(u => {
-    // Admin: read-only Einblick in die Wache eines Wachführers (Turmstati, ohne Aktionen).
-    const profileBtn = (canManage() && u.role === 'WACHFUEHRER' && u.towerId)
+    // Admin: read-only Einblick in den Scope eines Wachführers (alle seine Türme/Boote/Wachgänger).
+    const profileBtn = (canManage() && u.role === 'WACHFUEHRER')
       ? `<button onclick='openWfProfile(${JSON.stringify(u)})'>Profil ansehen</button> ` : '';
     return `
     <tr>
@@ -345,28 +509,30 @@ function renderUsers() {
     `<table><thead><tr><th>Benutzer</th><th>Name</th><th>Rolle</th><th>Turm</th><th>Aktiv</th><th>Letzter Login</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-// Read-only Wachführer-Profil: zeigt dem App-Admin die Lage der Wache (Turm + Wachgänger
-// + Boote des zugeordneten Turms) – rein zur Ansicht, KEINE Bestätigungs-/Aktionsrechte.
+// Read-only Wachführer-Profil: zeigt dem App-Admin den GESAMTEN Scope eines Wachführers
+// (alle seine Türme + Wachgänger + Boote, gefiltert nach ownerId === Wachführer-ID) –
+// rein zur Ansicht, KEINE Bestätigungs-/Aktionsrechte. Der Admin sieht via /api/* (all)
+// ohnehin alle Objekte; hier wird clientseitig auf den Scope dieses Wachführers gefiltert.
 function openWfProfile(u) {
-  const towerId = u.towerId;
-  const tower = towers.find(t => t.id === towerId);
-  const wTowerRows = tower
-    ? `<tr><td>${escapeHtml(tower.name)}</td><td>${tower.currentStaff}/${tower.requiredStaff}</td><td>${statusPill('towerStatus', tower.status)}</td></tr>`
-    : '<tr><td colspan="3" class="muted">Kein Turm gefunden.</td></tr>';
-  const wGuards = guards.filter(g => g.towerId === towerId);
+  const ownerId = u.id;
+  const wTowers = towers.filter(t => t.ownerId === ownerId);
+  const wTowerRows = wTowers.length
+    ? wTowers.map(t => `<tr><td>${escapeHtml(t.name)}</td><td>${t.currentStaff}/${t.requiredStaff}</td><td>${statusPill('towerStatus', t.status)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="muted">Keine Türme angelegt.</td></tr>';
+  const wGuards = guards.filter(g => g.ownerId === ownerId);
   const guardRows = wGuards.length
     ? wGuards.map(g => `<tr><td>${escapeHtml(g.name)}</td><td>${statusPill('guardStatus', g.status)}</td></tr>`).join('')
     : '<tr><td colspan="2" class="muted">Keine Wachgänger.</td></tr>';
-  const wBoats = boats.filter(b => b.towerId === towerId);
+  const wBoats = boats.filter(b => b.ownerId === ownerId);
   const boatRows = wBoats.length
     ? wBoats.map(b => `<tr><td>${escapeHtml(b.name)}</td><td>${statusPill('boatStatus', b.status)}</td></tr>`).join('')
     : '<tr><td colspan="2" class="muted">Keine Boote.</td></tr>';
 
   document.getElementById('wf-profile-title').textContent =
-    `Wache von ${u.fullName || u.username}${tower ? ' · ' + tower.name : ''}`;
+    `Scope von ${u.fullName || u.username}`;
   document.getElementById('wf-profile-body').innerHTML =
     `<p class="muted">Reine Ansicht – keine Bestätigungen möglich.</p>
-     <h4>Turm</h4><table><thead><tr><th>Turm</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${wTowerRows}</tbody></table>
+     <h4>Türme</h4><table><thead><tr><th>Turm</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${wTowerRows}</tbody></table>
      <h4 style="margin-top:12px">Wachgänger</h4><table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>${guardRows}</tbody></table>
      <h4 style="margin-top:12px">Boote</h4><table><thead><tr><th>Boot</th><th>Status</th></tr></thead><tbody>${boatRows}</tbody></table>`;
   openModal('wf-profile-modal');
@@ -458,6 +624,91 @@ async function saveUser() {
 async function deleteUser(id) {
   if (!confirm('Benutzer wirklich löschen?')) return;
   try { await apiDelete(userApiBase() + '/' + id); showToast('Gelöscht'); refreshAdmin(); }
+  catch (err) { showToast(err.message); }
+}
+
+// ── Demo-Konfiguration · Vorlagen-Türme (Admin) ──────────────
+function renderTowerTemplates() {
+  const panel = document.getElementById('tower-template-panel');
+  if (panel) panel.style.display = canManage() ? '' : 'none';
+  if (!canManage()) return;
+  const el = document.getElementById('template-table');
+  if (!el) return;
+  if (!towerTemplates.length) {
+    el.innerHTML = '<p class="muted">Noch keine Vorlagen-Türme. Neue Wachführer starten dann ohne Türme.</p>';
+    return;
+  }
+  const rows = towerTemplates.map(t => {
+    const pos = (t.latitude != null && t.longitude != null)
+      ? `${t.latitude.toFixed(4)}, ${t.longitude.toFixed(4)}` : '<span class="muted">nicht gesetzt</span>';
+    return `
+    <tr>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.callSign || '–')}</td>
+      <td>${t.requiredStaff}</td>
+      <td>${pos}</td>
+      <td class="row-actions">
+        <button onclick="openTemplateById(${t.id})">Bearbeiten</button>
+        <button class="danger" onclick="deleteTemplate(${t.id})">Löschen</button>
+      </td>
+    </tr>`; }).join('');
+  el.innerHTML =
+    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Soll</th><th>Position</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function openTemplateModal(tpl) {
+  document.getElementById('template-modal-error').textContent = '';
+  if (tpl && tpl.id) {
+    document.getElementById('template-modal-title').textContent = 'Vorlagen-Turm bearbeiten';
+    document.getElementById('template-modal-id').value = tpl.id;
+    document.getElementById('template-modal-name').value = tpl.name || '';
+    document.getElementById('template-modal-callsign').value = tpl.callSign || '';
+    document.getElementById('template-modal-staff').value = tpl.requiredStaff || 2;
+    document.getElementById('template-modal-lat').value = tpl.latitude != null ? tpl.latitude : '';
+    document.getElementById('template-modal-lng').value = tpl.longitude != null ? tpl.longitude : '';
+  } else {
+    document.getElementById('template-modal-title').textContent = 'Vorlagen-Turm anlegen';
+    document.getElementById('template-modal-id').value = '';
+    document.getElementById('template-modal-name').value = '';
+    document.getElementById('template-modal-callsign').value = '';
+    document.getElementById('template-modal-staff').value = 2;
+    document.getElementById('template-modal-lat').value = '';
+    document.getElementById('template-modal-lng').value = '';
+  }
+  openModal('template-modal');
+}
+
+function openTemplateById(id) {
+  const t = towerTemplates.find(x => x.id === id);
+  if (t) openTemplateModal(t);
+}
+
+async function saveTemplate() {
+  const id = document.getElementById('template-modal-id').value;
+  const errEl = document.getElementById('template-modal-error');
+  const name = document.getElementById('template-modal-name').value.trim();
+  if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
+  const latRaw = document.getElementById('template-modal-lat').value;
+  const lngRaw = document.getElementById('template-modal-lng').value;
+  const payload = {
+    name,
+    callSign: document.getElementById('template-modal-callsign').value.trim() || null,
+    requiredStaff: Number(document.getElementById('template-modal-staff').value) || 2,
+    latitude: latRaw === '' ? null : Number(latRaw),
+    longitude: lngRaw === '' ? null : Number(lngRaw)
+  };
+  try {
+    if (id) await apiPatch('/api/admin/tower-templates/' + id, payload);
+    else await apiPost('/api/admin/tower-templates', payload);
+    closeModal('template-modal');
+    showToast('Vorlage gespeichert');
+    refreshAdmin();
+  } catch (err) { errEl.textContent = err.message; }
+}
+
+async function deleteTemplate(id) {
+  if (!confirm('Vorlagen-Turm wirklich löschen?')) return;
+  try { await apiDelete('/api/admin/tower-templates/' + id); showToast('Vorlage gelöscht'); refreshAdmin(); }
   catch (err) { showToast(err.message); }
 }
 

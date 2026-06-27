@@ -28,17 +28,10 @@ const TRANSIENT_INTEGRITY_CODES = new Set(['SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLI
 const INIT_LOCK_TIMEOUT_MS = Number.parseInt(process.env.DB_INIT_LOCK_TIMEOUT_MS || '60000', 10);
 const INIT_LOCK_STALE_MS = Number.parseInt(process.env.DB_INIT_LOCK_STALE_MS || '120000', 10);
 
-// ── Demo-Seed: Türme + Boote an Ostsee-Koordinaten (nur wenn towers leer) ──
-const SEED_TOWERS = [
-  { name: 'Turm 1', call_sign: '9/12', latitude: 54.0145, longitude: 13.7680, required_staff: 2 },
-  { name: 'Turm 2', call_sign: '9/14', latitude: 54.0182, longitude: 13.7725, required_staff: 2 },
-  { name: 'Turm 3', call_sign: '9/16', latitude: 54.0221, longitude: 13.7771, required_staff: 2 },
-  { name: 'Turm 4', call_sign: '9/18', latitude: 54.0260, longitude: 13.7818, required_staff: 2 }
-];
-const SEED_BOATS = [
-  { name: 'Boot 78/1', call_sign: '78/1', towerIdx: 0, status: 'AT_TOWER', latitude: 54.0140, longitude: 13.7700 },
-  { name: 'Boot 78/2', call_sign: '78/2', towerIdx: 2, status: 'PATROL', latitude: 54.0210, longitude: 13.7790 }
-];
+// Hinweis: Kein Demo-Seed für Türme/Boote mehr. Im Mandanten-Modell (Scope-Isolation)
+// gehört jedes Objekt genau einem Wachführer (owner_id); ownerlose Seed-Türme wären für
+// keinen Wachführer sichtbar. Türme/Boote legt jeder Wachführer selbst in seiner App an.
+// Kartenzentrum (DLRG Hauptwache Dahme) kommt aus server/config.json.
 
 // Validate environment variables
 function validateEnv() {
@@ -181,19 +174,27 @@ function initDatabase() {
           db.run("ALTER TABLE users ADD COLUMN tower_id INTEGER", () => {});
           db.run("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1", () => {});
 
+          // Scope-Isolation (Mandanten-Modell wie Wachplan-Generator): jedes
+          // Domänenobjekt gehört genau einem Wachführer (owner_id). users.owner_id
+          // verknüpft Wachpersonal mit seinem Wachführer. Idempotent (ALTER ignoriert Fehler).
+          db.run("ALTER TABLE users ADD COLUMN owner_id INTEGER", () => {});
+          db.run("ALTER TABLE towers ADD COLUMN owner_id INTEGER", () => {});
+          db.run("ALTER TABLE guards ADD COLUMN owner_id INTEGER", () => {});
+          db.run("ALTER TABLE boats ADD COLUMN owner_id INTEGER", () => {});
+
           // Rollen-Umbenennung TURMFUEHRER → WACHFUEHRER (Bestands-DBs). Idempotent:
           // greift nur, solange noch alte Rollenwerte existieren.
           db.run("UPDATE users SET role = 'WACHFUEHRER' WHERE role = 'TURMFUEHRER'", () => {});
 
-          // Domain-Seed (Türme/Boote) + Admin-Seed nacheinander
-          seedDomain(db, () => seedAdmin(db, (seedErr) => {
+          // Admin-Seed (Türme/Boote werden NICHT geseedet – s. Mandanten-Modell oben)
+          seedAdmin(db, (seedErr) => {
             db.close((closeErr) => {
               if (releaseInitLock) releaseInitLock();
               if (seedErr) reject(seedErr);
               else if (closeErr) reject(closeErr);
               else resolve();
             });
-          }));
+          });
         });
       } // end proceedAfterIntegrity
     });
@@ -326,40 +327,6 @@ function healSessionCorruption(db, integErr) {
             resolve(true);
           })
           .catch(() => resolve(false));
-      });
-    });
-  });
-}
-
-// Türme/Boote anlegen, falls noch keine vorhanden (Demo-Lagebild beim Erststart)
-function seedDomain(db, done) {
-  db.get('SELECT COUNT(*) AS count FROM towers', (err, row) => {
-    if (err || (row && row.count > 0)) return done();
-
-    db.serialize(() => {
-      const towerIds = [];
-      let pending = SEED_TOWERS.length;
-      if (pending === 0) return done();
-
-      SEED_TOWERS.forEach((t, idx) => {
-        db.run(
-          'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff) VALUES (?, ?, ?, ?, ?)',
-          [t.name, t.call_sign, t.latitude, t.longitude, t.required_staff],
-          function () {
-            towerIds[idx] = this.lastID;
-            if (--pending === 0) {
-              let bp = SEED_BOATS.length;
-              if (bp === 0) { console.log('✓ Seeded demo towers'); return done(); }
-              SEED_BOATS.forEach((b) => {
-                db.run(
-                  'INSERT INTO boats (name, call_sign, tower_id, status, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?)',
-                  [b.name, b.call_sign, towerIds[b.towerIdx] || null, b.status, b.latitude, b.longitude],
-                  () => { if (--bp === 0) { console.log('✓ Seeded demo towers + boats'); done(); } }
-                );
-              });
-            }
-          }
-        );
       });
     });
   });

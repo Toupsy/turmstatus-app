@@ -2,6 +2,51 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
+
+Damit ein neu angelegter Wachführer nicht bei null startet, kann der App-Admin eine
+**Demo-Konfiguration** von Türmen pflegen, die jeder **neue** Wachführer automatisch erbt.
+- **Tabelle `tower_templates`** (Admin-gepflegt). API `GET/POST/PATCH/DELETE
+  /api/admin/tower-templates` (admin-gated; Wachführer → 403).
+- **Vererbung beim Anlegen:** `POST /api/admin/users` mit role=WACHFUEHRER klont alle Vorlagen-
+  Türme via `applyTowerTemplates()` in den Scope des neuen Wachführers (`towers.owner_id`).
+  Bestehende Wachführer bleiben unverändert.
+- **UI:** Panel „Demo-Konfiguration · Türme" im Verwaltung-Tab (nur Admin), Vorlagen-Modal
+  (Name/Funk/Sollstärke/Koordinaten), Anlegen/Bearbeiten/Löschen.
+- **Tests:** Vorlagen-CRUD admin-only + neuer Wachführer erbt Vorlage (28/28 grün).
+
+## Mandanten-Modell: Scope-Isolation pro Wachführer + Karte auf DLRG Hauptwache Dahme
+
+Geklärte Zielarchitektur (deckungsgleich zum Wachplan-Generator): **Jeder Wachführer ist ein
+eigener Mandant.** Er sieht, verwaltet und genehmigt ausschließlich sein Eigenes; andere
+Wachführer-Scopes sind komplett unsichtbar. Der App-Admin legt Wachführer an und sieht alles
+read-only.
+
+- **Scope-Isolation über `owner_id`:** Neue Spalte `owner_id` auf `towers`/`guards`/`boats` (=
+  Eigentümer-Wachführer) und auf `users` (= Wachführer, dem ein Personal-Konto gehört). Schema +
+  idempotente Migrationen. Helfer in `middleware.js`: `viewScope(user)` (Admin → alle; WF → eigene
+  id; Wachgänger/Bootsführer → owner_id ihres WF), `requireWachfuehrer` (WF-Gate ohne Admin-Bypass),
+  `isAdmin`.
+- **Alle Router gescoped:** `towers`/`guards`/`boats`/`requests`/`control-trips`/`team`/`dashboard`
+  filtern Lesezugriffe nach Scope; Schreiben/Genehmigen ist an den Owner gebunden. -1- und
+  Kontrollfahrt-Genehmigung erfolgt durch den **Owner-Wachführer** (Owner-Match statt Turm-Match).
+  `team` scoped Personal über `users.owner_id`.
+- **Türme & Boote verwaltet der Wachführer (DIVERA-artig):** „📍 Turm auf Karte setzen" platziert
+  per Karten-Klick einen Turm (Modal mit vorbefüllter Position); bestehende Turm-Marker sind **per
+  Drag verschiebbar** (`dragend` → PATCH lat/lng). Turm-/Boot-Modals (Anlegen/Bearbeiten), Lösch-
+  Buttons, Inline-Auswahl für **Boot↔Turm-Zuordnung** und Boot-Status. Nur für den Wachführer
+  sichtbar; der App-Admin sieht read-only (Profil-Dialog zeigt den gesamten Scope eines WF).
+  Koordinaten-Validierung (`parseCoord`: lat/lng-Range, sonst 400).
+- **Standort Dahme:** Kartenzentrum auf die **DLRG Hauptwache Dahme** (Strandpromenade,
+  `54.21449, 11.08967`, Zoom 15) in `server/config.json` + Fallback in `public/js/map.js`. **Kein
+  Demo-Seed** mehr für Türme/Boote (ownerlose Seeds wären für keinen Wachführer sichtbar) – jeder
+  Wachführer legt seine Objekte selbst an.
+- **Rollen-Anlage:** Admin legt **Wachführer** an; Wachführer legt nur **Wachgänger + Bootsführer**
+  an (kein „Turmführer").
+- **Tests:** `api.test.js` auf Isolation umgeschrieben (WF1 baut Scope; WF2 sieht/ändert davon
+  nichts → 403/400/leer; -1- & Kontrollfahrt nur durch Owner-WF; Admin sieht alle). `npm test` →
+  27/27 grün.
+
 ## Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen
 
 Infrastruktur-Härtung für den Betrieb hinter Cloudflare/NGINX:

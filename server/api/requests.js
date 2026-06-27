@@ -1,13 +1,18 @@
 // ============================================================
-// -1 / +1 Workflow-API (Bereich verlassen / Rückkehr)
-// beantragen → genehmigen/ablehnen → Rückkehr melden
+// -1 / +1 Workflow-API (Bereich verlassen / Rückkehr) – scoped
+// beantragen → genehmigen/ablehnen → Rückkehr
+//
+// Mandanten-Modell (Scope-Isolation): Anfragen betreffen immer einen Wachgänger,
+// der genau einem Wachführer gehört (guard.owner_id). Jeder sieht nur Anfragen seines
+// eigenen Scopes; genehmigen/ablehnen darf NUR der Wachführer, dem der Wachgänger
+// gehört. Der App-Admin sieht alles (read-only), darf aber NICHT entscheiden.
 // ============================================================
 
 const express = require('express');
 const router = express.Router();
 const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
-const { requireAuth, requireRole } = require('../middleware');
+const { requireAuth, requireRole, viewScope } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
@@ -16,13 +21,18 @@ const MAX_NOTE_LEN = 500;
 
 router.use(requireAuth);
 
-// GET /api/requests?status=PENDING – Anfragen auflisten (mit Wachgänger-/Turmname)
+// GET /api/requests?status=PENDING – Anfragen des eigenen Scopes (Admin: alle)
 router.get('/', async (req, res) => {
   try {
+    const scope = viewScope(req.user);
     const status = req.query.status;
-    const where = ['APPROVED', 'PENDING', 'REJECTED', 'RETURNED'].includes(status) ? 'WHERE r.status = ?' : '';
+    const conds = [];
+    const params = [];
+    if (['APPROVED', 'PENDING', 'REJECTED', 'RETURNED'].includes(status)) { conds.push('r.status = ?'); params.push(status); }
+    if (!scope.all) { conds.push('g.owner_id = ?'); params.push(scope.scopeId); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const rows = await dbAll(
-      `SELECT r.*, g.name AS guard_name, g.tower_id AS guard_tower_id, t.name AS tower_name,
+      `SELECT r.*, g.name AS guard_name, g.tower_id AS guard_tower_id, g.owner_id AS guard_owner_id, t.name AS tower_name,
               ub.username AS requested_by_name, ud.username AS decided_by_name
          FROM minus_one_requests r
          JOIN guards g ON g.id = r.guard_id
@@ -31,7 +41,7 @@ router.get('/', async (req, res) => {
          LEFT JOIN users ud ON ud.id = r.decided_by
          ${where}
         ORDER BY r.created_at DESC`,
-      where ? [status] : []
+      params
     );
     res.json({
       requests: rows.map(r => ({
@@ -40,6 +50,7 @@ router.get('/', async (req, res) => {
         guardName: r.guard_name,
         towerId: r.guard_tower_id,
         towerName: r.tower_name,
+        ownerId: r.guard_owner_id,
         reason: r.reason,
         note: r.note,
         status: r.status,
@@ -71,6 +82,12 @@ router.post('/minus-one', requireRole('WACHGAENGER', 'BOOTSFUEHRER', 'WACHFUEHRE
     const guard = await dbGet('SELECT * FROM guards WHERE id = ?', [guardId]);
     if (!guard) return res.status(404).json({ error: 'Guard not found' });
 
+    // Nur im eigenen Scope beantragbar (Admin hat keinen Scope → 403).
+    const scope = viewScope(req.user);
+    if (scope.all || guard.owner_id !== scope.scopeId) {
+      return res.status(403).json({ error: 'Wachgänger gehört nicht zur eigenen Wache' });
+    }
+
     // Keine doppelte offene Anfrage pro Wachgänger
     const open = await dbGet(
       "SELECT id FROM minus_one_requests WHERE guard_id = ? AND status IN ('PENDING','APPROVED')",
@@ -96,20 +113,19 @@ async function loadRequest(id) {
   return dbGet('SELECT * FROM minus_one_requests WHERE id = ?', [id]);
 }
 
-// Genehmigen/Ablehnen darf NUR der Wachführer der EIGENEN Wache (Turm des Wachgängers).
-// Der App-Admin (HAUPTWACHE/is_admin) hat bewusst KEINE Bestätigungsrechte (reine Ansicht).
-// Liefert { error, status } bei fehlender Berechtigung, sonst { reqRow, guard }.
+// Genehmigen/Ablehnen darf NUR der Wachführer, dem der Wachgänger gehört (owner-Match).
+// Der App-Admin hat bewusst KEINE Bestätigungsrechte (reine Ansicht).
 async function loadDecidableRequest(req, id) {
   const reqRow = await loadRequest(id);
   if (!reqRow) return { error: 404, message: 'Request not found' };
   const guard = await dbGet('SELECT * FROM guards WHERE id = ?', [reqRow.guard_id]);
-  if (req.user.role !== 'WACHFUEHRER' || !req.user.tower_id || !guard || guard.tower_id !== req.user.tower_id) {
+  if (req.user.role !== 'WACHFUEHRER' || !guard || guard.owner_id !== req.user.id) {
     return { error: 403, message: 'Nur der Wachführer der eigenen Wache darf entscheiden' };
   }
   return { reqRow, guard };
 }
 
-// POST /api/requests/:id/approve [WACHFUEHRER(eigene Wache)] → Wachgänger auf MINUS_ONE
+// POST /api/requests/:id/approve [WACHFUEHRER(Owner)] → Wachgänger auf MINUS_ONE
 router.post('/:id/approve', async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -132,7 +148,7 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
-// POST /api/requests/:id/reject [WACHFUEHRER(eigene Wache)]
+// POST /api/requests/:id/reject [WACHFUEHRER(Owner)]
 router.post('/:id/reject', express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -155,13 +171,20 @@ router.post('/:id/reject', express.json(), async (req, res) => {
   }
 });
 
-// POST /api/requests/:id/return – +1 / Rückkehr melden [alle Rollen]
+// POST /api/requests/:id/return – +1 / Rückkehr melden [eigener Scope]
 router.post('/:id/return', async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Anfrage-ID' });
     const reqRow = await loadRequest(id);
     if (!reqRow) return res.status(404).json({ error: 'Request not found' });
+
+    // Nur im eigenen Scope zurückmeldbar (Admin hat keinen Scope → 403).
+    const guard = await dbGet('SELECT owner_id FROM guards WHERE id = ?', [reqRow.guard_id]);
+    const scope = viewScope(req.user);
+    if (scope.all || !guard || guard.owner_id !== scope.scopeId) {
+      return res.status(403).json({ error: 'Anfrage gehört nicht zur eigenen Wache' });
+    }
     if (reqRow.status !== 'APPROVED') return res.status(409).json({ error: 'Nur genehmigte Anfragen können zurückgemeldet werden' });
 
     await dbRun(
