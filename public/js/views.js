@@ -320,8 +320,8 @@ function renderRequests() {
   } else {
     const rows = pending.map(r => {
       let actions = '';
-      // Entscheiden darf nur der Wachführer der eigenen Wache (Turm der Anfrage).
-      if (isWachfuehrer() && currentUser.towerId === r.towerId) {
+      // Entscheiden darf nur der Wachführer, dem der Wachgänger gehört (Scope-Owner).
+      if (isWachfuehrer() && currentUser.userId === r.ownerId) {
         actions = `<button class="ok" onclick="approveRequest(${r.id})">Genehmigen</button>
                    <button class="danger" onclick="openReject(${r.id})">Ablehnen</button>`;
       } else {
@@ -421,8 +421,8 @@ function renderControlTrips() {
   }
   const rows = controlTrips.map(c => {
     let actions = '';
-    // Entscheiden darf nur der Wachführer der eigenen Wache (Turm des Boots).
-    const canDecide = isWachfuehrer() && currentUser.towerId === c.towerId;
+    // Entscheiden darf nur der Wachführer, dem das Boot gehört (Scope-Owner).
+    const canDecide = isWachfuehrer() && currentUser.userId === c.ownerId;
     if (c.status === 'PENDING' && canDecide) {
       actions = `<button class="ok" onclick="approveControlTrip(${c.id})">Genehmigen</button>
                  <button class="danger" onclick="openRejectControlTrip(${c.id})">Ablehnen</button>`;
@@ -485,8 +485,8 @@ async function submitRejectControlTrip() {
 function renderUsers() {
   if (!users.length) { document.getElementById('user-table').innerHTML = '<p class="muted">Keine Benutzer.</p>'; return; }
   const rows = users.map(u => {
-    // Admin: read-only Einblick in die Wache eines Wachführers (Turmstati, ohne Aktionen).
-    const profileBtn = (canManage() && u.role === 'WACHFUEHRER' && u.towerId)
+    // Admin: read-only Einblick in den Scope eines Wachführers (alle seine Türme/Boote/Wachgänger).
+    const profileBtn = (canManage() && u.role === 'WACHFUEHRER')
       ? `<button onclick='openWfProfile(${JSON.stringify(u)})'>Profil ansehen</button> ` : '';
     return `
     <tr>
@@ -505,28 +505,30 @@ function renderUsers() {
     `<table><thead><tr><th>Benutzer</th><th>Name</th><th>Rolle</th><th>Turm</th><th>Aktiv</th><th>Letzter Login</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-// Read-only Wachführer-Profil: zeigt dem App-Admin die Lage der Wache (Turm + Wachgänger
-// + Boote des zugeordneten Turms) – rein zur Ansicht, KEINE Bestätigungs-/Aktionsrechte.
+// Read-only Wachführer-Profil: zeigt dem App-Admin den GESAMTEN Scope eines Wachführers
+// (alle seine Türme + Wachgänger + Boote, gefiltert nach ownerId === Wachführer-ID) –
+// rein zur Ansicht, KEINE Bestätigungs-/Aktionsrechte. Der Admin sieht via /api/* (all)
+// ohnehin alle Objekte; hier wird clientseitig auf den Scope dieses Wachführers gefiltert.
 function openWfProfile(u) {
-  const towerId = u.towerId;
-  const tower = towers.find(t => t.id === towerId);
-  const wTowerRows = tower
-    ? `<tr><td>${escapeHtml(tower.name)}</td><td>${tower.currentStaff}/${tower.requiredStaff}</td><td>${statusPill('towerStatus', tower.status)}</td></tr>`
-    : '<tr><td colspan="3" class="muted">Kein Turm gefunden.</td></tr>';
-  const wGuards = guards.filter(g => g.towerId === towerId);
+  const ownerId = u.id;
+  const wTowers = towers.filter(t => t.ownerId === ownerId);
+  const wTowerRows = wTowers.length
+    ? wTowers.map(t => `<tr><td>${escapeHtml(t.name)}</td><td>${t.currentStaff}/${t.requiredStaff}</td><td>${statusPill('towerStatus', t.status)}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="muted">Keine Türme angelegt.</td></tr>';
+  const wGuards = guards.filter(g => g.ownerId === ownerId);
   const guardRows = wGuards.length
     ? wGuards.map(g => `<tr><td>${escapeHtml(g.name)}</td><td>${statusPill('guardStatus', g.status)}</td></tr>`).join('')
     : '<tr><td colspan="2" class="muted">Keine Wachgänger.</td></tr>';
-  const wBoats = boats.filter(b => b.towerId === towerId);
+  const wBoats = boats.filter(b => b.ownerId === ownerId);
   const boatRows = wBoats.length
     ? wBoats.map(b => `<tr><td>${escapeHtml(b.name)}</td><td>${statusPill('boatStatus', b.status)}</td></tr>`).join('')
     : '<tr><td colspan="2" class="muted">Keine Boote.</td></tr>';
 
   document.getElementById('wf-profile-title').textContent =
-    `Wache von ${u.fullName || u.username}${tower ? ' · ' + tower.name : ''}`;
+    `Scope von ${u.fullName || u.username}`;
   document.getElementById('wf-profile-body').innerHTML =
     `<p class="muted">Reine Ansicht – keine Bestätigungen möglich.</p>
-     <h4>Turm</h4><table><thead><tr><th>Turm</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${wTowerRows}</tbody></table>
+     <h4>Türme</h4><table><thead><tr><th>Turm</th><th>Besetzung</th><th>Status</th></tr></thead><tbody>${wTowerRows}</tbody></table>
      <h4 style="margin-top:12px">Wachgänger</h4><table><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>${guardRows}</tbody></table>
      <h4 style="margin-top:12px">Boote</h4><table><thead><tr><th>Boot</th><th>Status</th></tr></thead><tbody>${boatRows}</tbody></table>`;
   openModal('wf-profile-modal');

@@ -2,34 +2,37 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
-## Wachführer verwaltet Türme & Boote + Karte auf DLRG Hauptwache Dahme
+## Mandanten-Modell: Scope-Isolation pro Wachführer + Karte auf DLRG Hauptwache Dahme
 
-Umsetzung der geklärten Zielarchitektur für den Wachführer als operativen Stations-Manager:
-- **Standort Dahme:** Kartenzentrum und Demo-Seed liegen jetzt an der **DLRG Hauptwache Dahme**
-  (Strandpromenade, `54.21449, 11.08967`, Zoom 15). Seed-Türme „Hauptwache Dahme / Turm Nord /
-  Turm Seebrücke / Turm Süd" plus zwei Boote entlang der Promenade (`server/config.json`,
-  `server/db/init.js`, Fallback in `public/js/map.js`).
-- **Türme & Boote sind Stations-Infrastruktur des Wachführers:** Der **Wachführer** legt Türme an,
-  **positioniert sie auf der Karte** und löscht sie; er legt Boote an, setzt deren Status und
-  **ordnet sie Türmen zu**. Türme sind nicht an einen einzelnen Wachführer gebunden – jeder
-  Wachführer der Wache darf jeden Turm pflegen.
-  - **Server:** `towers.js` (POST/PATCH/DELETE) und `boats.js` (POST/DELETE) von `HAUPTWACHE` auf
-    `requireRole('WACHFUEHRER')` geöffnet; der frühere Eigentums-Check im Turm-PATCH entfällt.
-    HAUPTWACHE bleibt per Bypass technischer Fallback (Erst-Setup), agiert in der UI rein ansehend.
-    Neue Koordinaten-Validierung (`parseCoord`: lat/lng als Zahl im gültigen Bereich, sonst 400).
-  - **Frontend (DIVERA-artig):** „📍 Turm auf Karte setzen" platziert per Karten-Klick einen Turm
-    (Modal mit vorbefüllter Position); bestehende Turm-Marker sind für den Wachführer **per Drag
-    verschiebbar** (`dragend` → PATCH lat/lng). Neue Turm-/Boot-Modals (Anlegen/Bearbeiten),
-    Lösch-Buttons, Inline-Auswahl für **Boot↔Turm-Zuordnung** und Boot-Status. Management-Bedienung
-    ausschließlich für den Wachführer sichtbar; der App-Admin sieht weiterhin nur an.
-- **Rollen-Anlage bestätigt:** Admin legt **Wachführer** an; Wachführer legt nur **Wachgänger +
-  Bootsführer** an (kein „Turmführer").
-- **Tests:** neuer Integrationsfall (Wachführer legt Turm an, positioniert, ordnet Boot zu, löscht;
-  Wachgänger erhält 403; ungültige Koordinaten → 400). `npm test` → 26/26 grün.
-- **Bewusst noch offen:** -1-/Kontrollfahrt-**Genehmigung** und **Personal-Anlage** bleiben vorerst
-  auf die eigene Wache (Turm) gescoped. Ob die Wache zu einem vollständigen „Ein-Standort"-Modell
-  (jeder Wachführer genehmigt alles, Personal stationsweit) werden soll, ist als Folge-Entscheidung
-  in HANDOFF.md notiert.
+Geklärte Zielarchitektur (deckungsgleich zum Wachplan-Generator): **Jeder Wachführer ist ein
+eigener Mandant.** Er sieht, verwaltet und genehmigt ausschließlich sein Eigenes; andere
+Wachführer-Scopes sind komplett unsichtbar. Der App-Admin legt Wachführer an und sieht alles
+read-only.
+
+- **Scope-Isolation über `owner_id`:** Neue Spalte `owner_id` auf `towers`/`guards`/`boats` (=
+  Eigentümer-Wachführer) und auf `users` (= Wachführer, dem ein Personal-Konto gehört). Schema +
+  idempotente Migrationen. Helfer in `middleware.js`: `viewScope(user)` (Admin → alle; WF → eigene
+  id; Wachgänger/Bootsführer → owner_id ihres WF), `requireWachfuehrer` (WF-Gate ohne Admin-Bypass),
+  `isAdmin`.
+- **Alle Router gescoped:** `towers`/`guards`/`boats`/`requests`/`control-trips`/`team`/`dashboard`
+  filtern Lesezugriffe nach Scope; Schreiben/Genehmigen ist an den Owner gebunden. -1- und
+  Kontrollfahrt-Genehmigung erfolgt durch den **Owner-Wachführer** (Owner-Match statt Turm-Match).
+  `team` scoped Personal über `users.owner_id`.
+- **Türme & Boote verwaltet der Wachführer (DIVERA-artig):** „📍 Turm auf Karte setzen" platziert
+  per Karten-Klick einen Turm (Modal mit vorbefüllter Position); bestehende Turm-Marker sind **per
+  Drag verschiebbar** (`dragend` → PATCH lat/lng). Turm-/Boot-Modals (Anlegen/Bearbeiten), Lösch-
+  Buttons, Inline-Auswahl für **Boot↔Turm-Zuordnung** und Boot-Status. Nur für den Wachführer
+  sichtbar; der App-Admin sieht read-only (Profil-Dialog zeigt den gesamten Scope eines WF).
+  Koordinaten-Validierung (`parseCoord`: lat/lng-Range, sonst 400).
+- **Standort Dahme:** Kartenzentrum auf die **DLRG Hauptwache Dahme** (Strandpromenade,
+  `54.21449, 11.08967`, Zoom 15) in `server/config.json` + Fallback in `public/js/map.js`. **Kein
+  Demo-Seed** mehr für Türme/Boote (ownerlose Seeds wären für keinen Wachführer sichtbar) – jeder
+  Wachführer legt seine Objekte selbst an.
+- **Rollen-Anlage:** Admin legt **Wachführer** an; Wachführer legt nur **Wachgänger + Bootsführer**
+  an (kein „Turmführer").
+- **Tests:** `api.test.js` auf Isolation umgeschrieben (WF1 baut Scope; WF2 sieht/ändert davon
+  nichts → 403/400/leer; -1- & Kontrollfahrt nur durch Owner-WF; Admin sieht alle). `npm test` →
+  27/27 grün.
 
 ## Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen
 

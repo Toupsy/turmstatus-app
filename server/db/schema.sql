@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   full_name TEXT,
   role TEXT NOT NULL DEFAULT 'WACHGAENGER',   -- HAUPTWACHE | WACHFUEHRER | WACHGAENGER | BOOTSFUEHRER
-  tower_id INTEGER,                            -- Zuordnung Wachführer/Wachgänger/Bootsführer zur Wache (optional)
+  tower_id INTEGER,                            -- Stationierung (welcher Turm) – optional, informativ
+  owner_id INTEGER,                            -- Scope-Isolation: Wachführer, dem dieses Personal-Konto gehört (NULL bei WF/Admin)
   is_admin BOOLEAN DEFAULT 0,                  -- 1 = Admin-Panel-Zugriff (App-Admin)
   is_active BOOLEAN DEFAULT 1,
   last_login DATETIME,                         -- Letzter erfolgreicher Login (UTC), NULL = noch nie
@@ -27,7 +28,9 @@ CREATE TABLE IF NOT EXISTS towers (
   latitude REAL,
   longitude REAL,
   required_staff INTEGER NOT NULL DEFAULT 2,   -- Sollstärke (für abgeleitete Turmfarbe)
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  owner_id INTEGER,                            -- Scope-Isolation: Wachführer, dem dieser Turm gehört
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Wachgänger (Lageobjekt / mobile Einheit)
@@ -39,9 +42,11 @@ CREATE TABLE IF NOT EXISTS guards (
   status TEXT NOT NULL DEFAULT 'IN_AREA',      -- IN_AREA | MINUS_ONE | DEPLOYED | BREAK
   latitude REAL,
   longitude REAL,
+  owner_id INTEGER,                            -- Scope-Isolation: Wachführer, dem dieser Wachgänger gehört
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-  FOREIGN KEY (tower_id) REFERENCES towers(id) ON DELETE SET NULL
+  FOREIGN KEY (tower_id) REFERENCES towers(id) ON DELETE SET NULL,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Boote (Rettungsboote)
@@ -53,8 +58,10 @@ CREATE TABLE IF NOT EXISTS boats (
   status TEXT NOT NULL DEFAULT 'AT_TOWER',     -- AT_TOWER | PATROL | DEPLOYED | OUT_OF_SERVICE
   latitude REAL,
   longitude REAL,
+  owner_id INTEGER,                            -- Scope-Isolation: Wachführer, dem dieses Boot gehört
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (tower_id) REFERENCES towers(id) ON DELETE SET NULL
+  FOREIGN KEY (tower_id) REFERENCES towers(id) ON DELETE SET NULL,
+  FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- -1 / +1 Workflow (Bereich verlassen / Rückkehr)
@@ -109,6 +116,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- Indices
 CREATE INDEX IF NOT EXISTS idx_guards_tower ON guards(tower_id);
 CREATE INDEX IF NOT EXISTS idx_boats_tower ON boats(tower_id);
+CREATE INDEX IF NOT EXISTS idx_towers_owner ON towers(owner_id);
+CREATE INDEX IF NOT EXISTS idx_guards_owner ON guards(owner_id);
+CREATE INDEX IF NOT EXISTS idx_boats_owner ON boats(owner_id);
+CREATE INDEX IF NOT EXISTS idx_users_owner ON users(owner_id);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON minus_one_requests(status);
 CREATE INDEX IF NOT EXISTS idx_requests_guard ON minus_one_requests(guard_id);
 CREATE INDEX IF NOT EXISTS idx_control_trips_status ON control_trip_requests(status);

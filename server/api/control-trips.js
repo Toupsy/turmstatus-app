@@ -1,16 +1,19 @@
 // ============================================================
-// Kontrollfahrt-Anfragen – Bootsführer beantragen, Hauptwache/Wachführer
-// genehmigen oder lehnen ab.
+// Kontrollfahrt-Anfragen – Bootsführer beantragen, Wachführer (Owner) entscheidet.
 //
-// BEWUSST GROB: vorerst nur der Workflow-Rahmen (beantragen → genehmigen/ablehnen).
-// Es wird noch KEIN Boot-Status o. Ä. gesetzt – diese Folgelogik kommt später.
+// Mandanten-Modell (Scope-Isolation): Eine Kontrollfahrt betrifft ein Boot, das genau
+// einem Wachführer gehört (boat.owner_id). Jeder sieht nur Anfragen seines Scopes;
+// genehmigen/ablehnen darf NUR der Wachführer, dem das Boot gehört. Admin = view-only.
+//
+// BEWUSST GROB: vorerst nur der Workflow-Rahmen (beantragen → genehmigen/ablehnen),
+// noch KEINE Boot-Statuslogik – diese Folgelogik kommt später.
 // ============================================================
 
 const express = require('express');
 const router = express.Router();
 const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
-const { requireAuth, requireRole } = require('../middleware');
+const { requireAuth, requireRole, viewScope } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
@@ -18,13 +21,18 @@ const MAX_NOTE_LEN = 500;
 
 router.use(requireAuth);
 
-// GET /api/control-trips?status=PENDING – Anfragen auflisten (gemeinsames Lagebild)
+// GET /api/control-trips?status=PENDING – Anfragen des eigenen Scopes (Admin: alle)
 router.get('/', async (req, res) => {
   try {
+    const scope = viewScope(req.user);
     const status = req.query.status;
-    const where = ['PENDING', 'APPROVED', 'REJECTED'].includes(status) ? 'WHERE c.status = ?' : '';
+    const conds = [];
+    const params = [];
+    if (['PENDING', 'APPROVED', 'REJECTED'].includes(status)) { conds.push('c.status = ?'); params.push(status); }
+    if (!scope.all) { conds.push('b.owner_id = ?'); params.push(scope.scopeId); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const rows = await dbAll(
-      `SELECT c.*, b.name AS boat_name, b.call_sign AS boat_call_sign, b.tower_id AS boat_tower_id,
+      `SELECT c.*, b.name AS boat_name, b.call_sign AS boat_call_sign, b.tower_id AS boat_tower_id, b.owner_id AS boat_owner_id,
               t.name AS tower_name, ub.username AS requested_by_name, ud.username AS decided_by_name
          FROM control_trip_requests c
          JOIN boats b ON b.id = c.boat_id
@@ -33,7 +41,7 @@ router.get('/', async (req, res) => {
          LEFT JOIN users ud ON ud.id = c.decided_by
          ${where}
         ORDER BY c.created_at DESC`,
-      where ? [status] : []
+      params
     );
     res.json({
       controlTrips: rows.map(c => ({
@@ -43,6 +51,7 @@ router.get('/', async (req, res) => {
         boatCallSign: c.boat_call_sign,
         towerId: c.boat_tower_id,
         towerName: c.tower_name,
+        ownerId: c.boat_owner_id,
         note: c.note,
         status: c.status,
         rejectionReason: c.rejection_reason,
@@ -68,8 +77,14 @@ router.post('/', requireRole('BOOTSFUEHRER'), express.json(), async (req, res) =
       return res.status(400).json({ error: 'Notiz zu lang' });
     }
 
-    const boat = await dbGet('SELECT id FROM boats WHERE id = ?', [boatId]);
+    const boat = await dbGet('SELECT id, owner_id FROM boats WHERE id = ?', [boatId]);
     if (!boat) return res.status(404).json({ error: 'Boat not found' });
+
+    // Nur für Boote der eigenen Wache beantragbar.
+    const scope = viewScope(req.user);
+    if (scope.all || boat.owner_id !== scope.scopeId) {
+      return res.status(403).json({ error: 'Boot gehört nicht zur eigenen Wache' });
+    }
 
     // Keine doppelte offene Anfrage pro Boot.
     const open = await dbGet(
@@ -91,22 +106,21 @@ router.post('/', requireRole('BOOTSFUEHRER'), express.json(), async (req, res) =
   }
 });
 
-// Entscheiden darf NUR der Wachführer der EIGENEN Wache (Turm des Boots). Der App-Admin
-// (HAUPTWACHE/is_admin) hat bewusst KEINE Bestätigungsrechte (reine Ansicht).
+// Entscheiden darf NUR der Wachführer, dem das Boot gehört (owner-Match). Admin: NEIN.
 async function loadDecidable(req, id) {
   const row = await dbGet(
-    `SELECT c.*, b.tower_id AS boat_tower_id FROM control_trip_requests c
+    `SELECT c.*, b.owner_id AS boat_owner_id FROM control_trip_requests c
        JOIN boats b ON b.id = c.boat_id WHERE c.id = ?`,
     [id]
   );
   if (!row) return { error: 404 };
-  if (req.user.role !== 'WACHFUEHRER' || !req.user.tower_id || row.boat_tower_id !== req.user.tower_id) {
+  if (req.user.role !== 'WACHFUEHRER' || row.boat_owner_id !== req.user.id) {
     return { error: 403 };
   }
   return { row };
 }
 
-// POST /api/control-trips/:id/approve [WACHFUEHRER(eigene Wache)]
+// POST /api/control-trips/:id/approve [WACHFUEHRER(Owner)]
 router.post('/:id/approve', async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -129,7 +143,7 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
-// POST /api/control-trips/:id/reject [WACHFUEHRER(eigene Wache)]
+// POST /api/control-trips/:id/reject [WACHFUEHRER(Owner)]
 router.post('/:id/reject', express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);

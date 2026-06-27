@@ -1,18 +1,17 @@
 // ============================================================
-// Türme-API – Liste mit abgeleitetem Status, CRUD (Wachführer/Admin-Fallback)
+// Türme-API – Liste mit abgeleitetem Status, CRUD (Wachführer, scoped)
 //
-// Architektur: Türme sind STATIONS-Infrastruktur. Sie werden vom WACHFUEHRER
-// angelegt, auf der Karte positioniert (lat/lng) und gelöscht – nicht an einen
-// einzelnen Wachführer gebunden (jeder Wachführer der Wache darf jeden Turm
-// pflegen). HAUPTWACHE (App-Admin) wird von requireRole als technischer Fallback
-// durchgelassen (z. B. Erst-Setup), agiert in der UI aber rein ansehend.
+// Mandanten-Modell (Scope-Isolation, wie Wachplan-Generator): Jeder Turm gehört
+// genau EINEM Wachführer (owner_id). Ein Wachführer sieht & verwaltet ausschließlich
+// seine eigenen Türme; andere Wachführer sehen sie nicht. Der App-Admin (HAUPTWACHE)
+// sieht ALLE Türme – aber rein ansehend (kein Anlegen/Ändern/Löschen).
 // ============================================================
 
 const express = require('express');
 const router = express.Router();
 const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
-const { requireAuth, requireRole } = require('../middleware');
+const { requireAuth, requireWachfuehrer, viewScope } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 const { deriveTowerStatus } = require('../status');
@@ -32,10 +31,13 @@ function parseCoord(value, kind) {
 
 router.use(requireAuth);
 
-// GET /api/towers – alle Türme mit abgeleitetem Status + Besetzungszahl
+// GET /api/towers – Türme des eigenen Scopes (Admin: alle) mit abgeleitetem Status
 router.get('/', async (req, res) => {
   try {
-    const towers = await dbAll('SELECT * FROM towers ORDER BY name');
+    const scope = viewScope(req.user);
+    const towers = scope.all
+      ? await dbAll('SELECT * FROM towers ORDER BY name')
+      : await dbAll('SELECT * FROM towers WHERE owner_id = ? ORDER BY name', [scope.scopeId]);
     const counts = await dbAll(
       "SELECT tower_id, COUNT(*) AS n FROM guards WHERE status = 'IN_AREA' AND tower_id IS NOT NULL GROUP BY tower_id"
     );
@@ -50,6 +52,7 @@ router.get('/', async (req, res) => {
           latitude: t.latitude,
           longitude: t.longitude,
           requiredStaff: t.required_staff,
+          ownerId: t.owner_id,
           currentStaff: current,
           status: deriveTowerStatus(current, t.required_staff)
         };
@@ -61,8 +64,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/towers – Turm anlegen [WACHFUEHRER | HAUPTWACHE-Fallback]
-router.post('/', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
+// POST /api/towers – Turm anlegen [WACHFUEHRER] (owner_id = anlegender Wachführer)
+router.post('/', requireWachfuehrer, express.json(), async (req, res) => {
   try {
     const { name, callSign, latitude, longitude, requiredStaff } = req.body;
     if (!name || typeof name !== 'string' || name.length > MAX_NAME_LEN) {
@@ -72,8 +75,8 @@ router.post('/', requireRole('WACHFUEHRER'), express.json(), async (req, res) =>
     const lng = parseCoord(longitude, 'lng');
     if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
     const result = await dbRun(
-      'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff) VALUES (?, ?, ?, ?, ?)',
-      [name, callSign || null, lat.value, lng.value, Number(requiredStaff) || 2]
+      'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff, owner_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, callSign || null, lat.value, lng.value, Number(requiredStaff) || 2, req.user.id]
     );
     await recordAudit(req, 'tower_create', 'tower', result.lastID, { name });
     broadcast('towers-updated');
@@ -84,16 +87,23 @@ router.post('/', requireRole('WACHFUEHRER'), express.json(), async (req, res) =>
   }
 });
 
-// PATCH /api/towers/:id – bearbeiten/positionieren [WACHFUEHRER | HAUPTWACHE-Fallback]
-// Türme gehören der Wache, nicht einem einzelnen Wachführer → jeder Wachführer darf
-// jeden Turm pflegen (Stammdaten + Kartenposition).
-router.patch('/:id', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
+// Lädt einen Turm NUR, wenn er dem anfragenden Wachführer gehört. Sonst { error }.
+async function loadOwnTower(req, id) {
+  const tower = await dbGet('SELECT * FROM towers WHERE id = ?', [id]);
+  if (!tower) return { error: 404 };
+  if (tower.owner_id !== req.user.id) return { error: 403 };
+  return { tower };
+}
+
+// PATCH /api/towers/:id – bearbeiten/positionieren [WACHFUEHRER, nur eigener Turm]
+router.patch('/:id', requireWachfuehrer, express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Turm-ID' });
 
-    const tower = await dbGet('SELECT * FROM towers WHERE id = ?', [id]);
-    if (!tower) return res.status(404).json({ error: 'Tower not found' });
+    const { tower, error } = await loadOwnTower(req, id);
+    if (error === 404) return res.status(404).json({ error: 'Tower not found' });
+    if (error === 403) return res.status(403).json({ error: 'Kein eigener Turm' });
 
     const { name, callSign, latitude, longitude, requiredStaff } = req.body;
     if (name !== undefined && (typeof name !== 'string' || !name || name.length > MAX_NAME_LEN)) {
@@ -125,14 +135,15 @@ router.patch('/:id', requireRole('WACHFUEHRER'), express.json(), async (req, res
   }
 });
 
-// DELETE /api/towers/:id [WACHFUEHRER | HAUPTWACHE-Fallback]
-router.delete('/:id', requireRole('WACHFUEHRER'), async (req, res) => {
+// DELETE /api/towers/:id [WACHFUEHRER, nur eigener Turm]
+router.delete('/:id', requireWachfuehrer, async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Turm-ID' });
 
-    const tower = await dbGet('SELECT id FROM towers WHERE id = ?', [id]);
-    if (!tower) return res.status(404).json({ error: 'Tower not found' });
+    const { error } = await loadOwnTower(req, id);
+    if (error === 404) return res.status(404).json({ error: 'Tower not found' });
+    if (error === 403) return res.status(403).json({ error: 'Kein eigener Turm' });
 
     await dbRun('DELETE FROM towers WHERE id = ?', [id]);
     await recordAudit(req, 'tower_delete', 'tower', id);

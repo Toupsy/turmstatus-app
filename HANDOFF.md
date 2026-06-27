@@ -9,36 +9,41 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
-## Zuletzt (DLRG-Wache-Architektur: Wachführer verwaltet Türme/Boote + Karte auf Dahme)
-- **Geo:** Kartenzentrum + Demo-Seed auf die **DLRG Hauptwache Dahme** (Strandpromenade,
-  `54.21449, 11.08967`, Zoom 15) umgestellt – `server/config.json`, `public/js/map.js`
-  (Fallback) und `server/db/init.js` (Seed-Türme „Hauptwache Dahme / Turm Nord / Seebrücke /
-  Süd" + zwei Boote entlang der Promenade).
-- **Wachführer verwaltet jetzt Türme & Boote (Stations-Infrastruktur):**
-  - Backend: `towers.js` (POST/PATCH/DELETE) und `boats.js` (POST/DELETE) von `HAUPTWACHE`
-    auf `requireRole('WACHFUEHRER')` geöffnet (HAUPTWACHE bleibt per Bypass technischer
-    Fallback fürs Erst-Setup, agiert in der UI aber rein ansehend). Türme sind **nicht** an
-    einen einzelnen Wachführer gebunden – **jeder** Wachführer darf **jeden** Turm pflegen
-    (PATCH-Eigentums-Check entfernt). Neue Koordinaten-Validierung (`parseCoord`, lat/lng-Range).
-  - Frontend: **DIVERA-artige Karten-Bedienung** – „📍 Turm auf Karte setzen" (Klick platziert
-    Turm, öffnet Modal mit vorbefüllter Position) + **verschiebbare** Turm-Marker (Drag → PATCH
-    Position) für den Wachführer (`map.js`: `_towerIcon`, `setAddTowerMode`, draggable L.marker
-    statt circleMarker). Neue Turm-/Boot-Modals + Tabellen-Aktionen (Anlegen/Bearbeiten/Löschen),
-    **Boot↔Turm-Zuordnung** per Inline-Select (`views.js`, `Turmstatus.html`, `init.js`,
-    `state.js:_addTowerMode`). Management-UI nur für Wachführer; Admin sieht nur an.
-- **Rollen-Anlage:** unverändert korrekt – Admin legt **Wachführer** an; Wachführer legt nur
-  **Wachgänger + Bootsführer** an (kein „Turmführer"). Passt zur Anforderung.
-- **Tests:** neuer Integrationstest „Wachführer verwaltet Türme + Boote; Wachgänger darf NICHT"
-  (Anlegen/Positionieren/Zuordnen/Löschen + 403 für Wachgänger + 400 bei Bad-Coords). `npm test` → **26/26 grün**.
-- **BEWUSSTE ARCHITEKTUR-ENTSCHEIDUNG (bitte prüfen):** Diese Iteration macht **nur die
-  Infrastruktur** (Türme/Boote) stationsweit durch den Wachführer verwaltbar. **Unverändert
-  gelassen** wurden – weil nicht explizit gefordert und test-/gate-kritisch:
-  (a) **-1-/Kontrollfahrt-Genehmigung** bleibt auf die **eigene Wache** (Turm-Match) gescoped;
-  (b) **Personal-Anlage** (`team.js`) bleibt auf `tower_id` des Wachführers gescoped;
-  (c) `users.tower_id` bleibt für Genehmigung/Team maßgeblich.
-  → **Offene Frage:** Soll die Wache **vollständig „Ein-Standort"** werden (jeder Wachführer
-  genehmigt alles, Personal stationsweit)? Dann müssten `requests.js`/`control-trips.js`/`team.js`
-  + `api.test.js`-403-Erwartungen angepasst werden. Bewusst noch nicht getan.
+## Zuletzt (Mandanten-Modell: vollständige Scope-Isolation pro Wachführer + Karte auf Dahme)
+**Vom Nutzer bestätigte Zielarchitektur** (deckungsgleich zum Wachplan-Generator, wo jeder
+Wachführer-Account nur seine eigenen Daten verwaltet): **Jeder Wachführer ist ein eigener
+Mandant.** Er **sieht, verwaltet und genehmigt ausschließlich sein Eigenes** – andere
+Wachführer-Scopes sind für ihn komplett unsichtbar. Der App-Admin legt Wachführer an und
+**sieht alles read-only** (Einblick in jedes WF-Panel). *(Eine frühere Zwischenversion hatte
+die Verwaltung „stationsweit" gemacht – das wurde wieder ersetzt.)*
+
+- **Scope-Isolation (`owner_id`):** Neue Spalte **`owner_id`** auf `towers`/`guards`/`boats`
+  (= Wachführer, dem das Objekt gehört) und auf **`users`** (= Wachführer, dem ein
+  Personal-Konto gehört). Schema (`db/schema.sql`) + idempotente Migrationen (`db/init.js`).
+  Neuer Helfer `middleware.js`: `viewScope(user)` (Admin → alle; WF → eigene `id`;
+  Wachgänger/Bootsführer → `owner_id` ihres WF), `requireWachfuehrer` (striktes WF-Gate **ohne**
+  HAUPTWACHE-Bypass → Admin echt view-only), `isAdmin`.
+- **Alle Router gescoped:** `towers`/`guards`/`boats`/`requests`/`control-trips`/`team`/`dashboard`
+  filtern GET nach Scope; Schreib-/Genehmigungsrechte sind an den **Owner** gebunden
+  (Turm/Boot/Wachgänger gehört dem WF). `requests`/`control-trips` genehmigt nur der **Owner-WF**
+  (Turm-Match durch Owner-Match ersetzt). `team` scoped Personal über `users.owner_id` statt
+  `tower_id`. Antworten liefern `ownerId` mit.
+- **Türme/Boote-Verwaltung (DIVERA-artig, WF-only):** „📍 Turm auf Karte setzen" (Klick → Modal
+  mit Position), **verschiebbare** Turm-Marker (Drag → PATCH), Turm-/Boot-Modals + Tabellen-
+  Aktionen, **Boot↔Turm-Zuordnung**. Karten-Marker/Tabellen-Editoren nur für den WF; Admin nur Ansicht.
+- **Geo:** Kartenzentrum auf **DLRG Hauptwache Dahme** (`54.21449, 11.08967`, Zoom 15) in
+  `server/config.json` + Fallback in `public/js/map.js`. **Kein Demo-Seed mehr** für Türme/Boote
+  (ownerlose Seeds wären für keinen WF sichtbar) – jeder WF legt seine Objekte selbst an.
+- **Admin-Profil:** „Profil ansehen" zeigt den **gesamten Scope** eines WF (alle seine
+  Türme/Boote/Wachgänger), clientseitig per `ownerId === WF.id` gefiltert.
+- **Rollen-Anlage:** Admin legt **Wachführer** an; Wachführer legt nur **Wachgänger + Bootsführer**
+  an (kein „Turmführer").
+- **Tests:** `api.test.js` komplett auf Isolation umgeschrieben (WF1 baut Scope; WF2 sieht/ändert
+  nichts davon → 403/400/leer; -1- & Kontrollfahrt nur durch Owner-WF; Admin sieht alle).
+  `npm test` → **27/27 grün**.
+- **Offen/Folge:** Admin-API (`/api/admin/*`) legt Personal weiterhin ohne `owner_id` an (Admin
+  legt v. a. Wachführer an – Personal kommt über den WF). `users.tower_id` ist jetzt nur noch
+  informative Stationierung (Scope läuft über `owner_id`).
 
 ## Zuletzt (Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen)
 - Neuer gemeinsamer `server/http-common.js` mit `trustProxyValue()`, `overrideClientIp()`,
