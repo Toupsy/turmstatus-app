@@ -62,7 +62,7 @@ api/boats.js       Boote: Liste, CRUD, Status/Position, Turm-Zuordnung – owner
 api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr; owner-scoped (Owner-WF entscheidet)
 api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → Owner-WF (dem das Boot gehört) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
 api/dashboard.js   GET /summary – Lage-Kennzahlen (owner-scoped; Admin: alle)
-api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers (Haupt- UND Admin-Server)
+api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers + Demo-Konfiguration (tower_templates CRUD; bei WF-Anlage als Start-Türme in dessen Scope geklont)
 api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng über users.owner_id gescoped (Mandant = Wachführer)
 ```
 **Pfad-Konvention:** `server/*` → `../public`/`../data`; `server/db/*` → `../../data`.
@@ -88,6 +88,7 @@ init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung
 users   id, username, password_hash, full_name, role[HAUPTWACHE|WACHFUEHRER|WACHGAENGER|BOOTSFUEHRER],
         tower_id(FK, informative Stationierung), owner_id(FK→users, Mandant: Wachführer dieses Personals), is_admin, is_active, last_login, created_at, updated_at
 towers  id, name, call_sign, latitude, longitude, required_staff, owner_id(FK→users, Eigentümer-Wachführer), created_at
+tower_templates  id, name, call_sign, latitude, longitude, required_staff, created_at  (Demo-Konfiguration: Admin-gepflegt, bei WF-Anlage in towers(owner_id) kopiert)
 guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, owner_id(FK→users), updated_at
 boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], lat, lng, owner_id(FK→users), updated_at
 minus_one_requests  id, guard_id(FK), requested_by(FK), reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER],

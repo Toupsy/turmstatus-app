@@ -33,6 +33,19 @@ CREATE TABLE IF NOT EXISTS towers (
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Demo-Konfiguration: Türme-Vorlage. Vom App-Admin gepflegt; beim Anlegen jedes
+-- neuen Wachführer-Kontos werden diese Türme als Startkonfiguration in dessen Scope
+-- (towers.owner_id = neuer Wachführer) kopiert.
+CREATE TABLE IF NOT EXISTS tower_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  call_sign TEXT,
+  latitude REAL,
+  longitude REAL,
+  required_staff INTEGER NOT NULL DEFAULT 2,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Wachgänger (Lageobjekt / mobile Einheit)
 CREATE TABLE IF NOT EXISTS guards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

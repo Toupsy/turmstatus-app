@@ -208,6 +208,11 @@
         <h2>Benutzerverwaltung <button id="btn-new-user" class="primary" style="float:right">+ Benutzer</button></h2>
         <div id="user-table"></div>
       </div>
+      <div class="panel" id="tower-template-panel" style="display:none">
+        <h2>Demo-Konfiguration · Türme <button id="btn-new-template" class="primary" style="float:right">+ Vorlagen-Turm</button></h2>
+        <p class="muted" style="margin-bottom:12px">Diese Türme werden bei jedem <b>neu</b> angelegten Wachführer-Konto automatisch als Startkonfiguration übernommen.</p>
+        <div id="template-table"></div>
+      </div>
       <div class="panel">
         <h2>Audit-Protokoll</h2>
         <div id="audit-table"></div>
@@ -358,6 +363,35 @@
     <div class="modal-actions">
       <button id="tower-modal-cancel">Abbrechen</button>
       <button class="primary" id="tower-modal-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Vorlagen-Turm-Modal (Demo-Konfiguration, Admin) ── -->
+<div id="template-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="template-modal-title">Vorlagen-Turm anlegen</h3>
+    <input type="hidden" id="template-modal-id">
+    <label for="template-modal-name">Name</label>
+    <input id="template-modal-name" maxlength="120">
+    <label for="template-modal-callsign">Funkrufname (optional)</label>
+    <input id="template-modal-callsign">
+    <label for="template-modal-staff">Sollstärke</label>
+    <input id="template-modal-staff" type="number" min="1" max="20" value="2">
+    <div class="grid2">
+      <div>
+        <label for="template-modal-lat">Breite (lat)</label>
+        <input id="template-modal-lat" type="number" step="0.00001">
+      </div>
+      <div>
+        <label for="template-modal-lng">Länge (lng)</label>
+        <input id="template-modal-lng" type="number" step="0.00001">
+      </div>
+    </div>
+    <div class="err" id="template-modal-error"></div>
+    <div class="modal-actions">
+      <button id="template-modal-cancel">Abbrechen</button>
+      <button class="primary" id="template-modal-save">Speichern</button>
     </div>
   </div>
 </div>

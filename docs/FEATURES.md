@@ -2,6 +2,19 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
+
+Damit ein neu angelegter Wachführer nicht bei null startet, kann der App-Admin eine
+**Demo-Konfiguration** von Türmen pflegen, die jeder **neue** Wachführer automatisch erbt.
+- **Tabelle `tower_templates`** (Admin-gepflegt). API `GET/POST/PATCH/DELETE
+  /api/admin/tower-templates` (admin-gated; Wachführer → 403).
+- **Vererbung beim Anlegen:** `POST /api/admin/users` mit role=WACHFUEHRER klont alle Vorlagen-
+  Türme via `applyTowerTemplates()` in den Scope des neuen Wachführers (`towers.owner_id`).
+  Bestehende Wachführer bleiben unverändert.
+- **UI:** Panel „Demo-Konfiguration · Türme" im Verwaltung-Tab (nur Admin), Vorlagen-Modal
+  (Name/Funk/Sollstärke/Koordinaten), Anlegen/Bearbeiten/Löschen.
+- **Tests:** Vorlagen-CRUD admin-only + neuer Wachführer erbt Vorlage (28/28 grün).
+
 ## Mandanten-Modell: Scope-Isolation pro Wachführer + Karte auf DLRG Hauptwache Dahme
 
 Geklärte Zielarchitektur (deckungsgleich zum Wachplan-Generator): **Jeder Wachführer ist ein

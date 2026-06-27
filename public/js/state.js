@@ -12,6 +12,7 @@ let boats = [];              // [{ id, name, callSign, towerId, towerName, statu
 let requests = [];           // [{ id, guardId, guardName, reason, note, status, ... }]
 let users = [];              // (Admin/Wachführer) [{ id, username, role, ... }]
 let controlTrips = [];       // [{ id, boatId, boatName, status, ... }] Kontrollfahrt-Anfragen
+let towerTemplates = [];     // (Admin) Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
 
 let activeTab = 'map';       // aktueller Tab
 

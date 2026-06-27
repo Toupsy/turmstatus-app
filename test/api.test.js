@@ -199,6 +199,34 @@ test('Admin sieht alle Mandanten (Türme aller Wachführer)', async () => {
   assert.ok(['GREEN', 'YELLOW', 'RED'].includes(towers[0].status));
 });
 
+test('Demo-Konfiguration: Vorlagen-Türme + Vererbung an neuen Wachführer', async () => {
+  // Admin pflegt die Demo-Konfiguration (Vorlagen-Türme)
+  await login('hauptwache', 'wache2024test');
+  const tpl = await api('POST', '/api/admin/tower-templates',
+    { name: 'Vorlage Hauptwache', callSign: '00/01', latitude: 54.2145, longitude: 11.0897, requiredStaff: 3 });
+  assert.strictEqual(tpl.status, 201);
+  assert.strictEqual((await api('GET', '/api/admin/tower-templates')).data.templates.length, 1);
+
+  // Wachführer hat KEINEN Zugriff auf die Vorlagen-Verwaltung (Admin-Gate)
+  await login(WF1.username, WF1.password);
+  assert.strictEqual((await api('GET', '/api/admin/tower-templates')).status, 403);
+
+  // Admin legt einen NEUEN Wachführer an → erbt die Vorlagen-Türme in seinen Scope
+  await login('hauptwache', 'wache2024test');
+  assert.strictEqual((await api('POST', '/api/admin/users',
+    { username: 'wf3', password: 'wachfuehrer-333', role: 'WACHFUEHRER' })).status, 201);
+
+  await login('wf3', 'wachfuehrer-333');
+  const wf3Towers = (await api('GET', '/api/towers')).data.towers;
+  assert.strictEqual(wf3Towers.length, 1);
+  assert.strictEqual(wf3Towers[0].name, 'Vorlage Hauptwache');
+  assert.ok(wf3Towers[0].ownerId, 'geerbter Turm hat einen owner (eigener Scope)');
+
+  // Bereits VORHER angelegte Wachführer (WF1) bleiben unberührt
+  await login(WF1.username, WF1.password);
+  assert.ok(!(await api('GET', '/api/towers')).data.towers.some(t => t.name === 'Vorlage Hauptwache'));
+});
+
 test('Dashboard-Summary liefert Kennzahlen', async () => {
   await login('hauptwache', 'wache2024test');
   const { status, data } = await api('GET', '/api/dashboard/summary');

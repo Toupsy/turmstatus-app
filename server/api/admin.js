@@ -13,6 +13,30 @@ const { broadcast } = require('../realtime');
 
 const ROLES = ['HAUPTWACHE', 'WACHFUEHRER', 'WACHGAENGER', 'BOOTSFUEHRER'];
 const MIN_PASSWORD_LENGTH = 10;
+const MAX_NAME_LEN = 120;
+
+// Optionaler Koordinatenwert: null/leer erlaubt, sonst Zahl im gültigen Bereich.
+function parseCoord(value, kind) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const n = Number(value);
+  if (!Number.isFinite(n)) return { ok: false };
+  if (kind === 'lat' && (n < -90 || n > 90)) return { ok: false };
+  if (kind === 'lng' && (n < -180 || n > 180)) return { ok: false };
+  return { ok: true, value: n };
+}
+
+// Kopiert die Demo-Konfiguration (tower_templates) als Start-Türme in den Scope eines
+// neu angelegten Wachführers (towers.owner_id = ownerId). Gibt die Anzahl zurück.
+async function applyTowerTemplates(ownerId) {
+  const templates = await dbAll('SELECT * FROM tower_templates ORDER BY id');
+  for (const t of templates) {
+    await dbRun(
+      'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff, owner_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [t.name, t.call_sign, t.latitude, t.longitude, t.required_staff, ownerId]
+    );
+  }
+  return templates.length;
+}
 
 // Admin-Gate: Session nötig + is_admin. (Eigenständig, damit der Admin-Server
 // dieselbe Datei ohne die volle requireAuth-Kette nutzen kann.)
@@ -79,6 +103,11 @@ router.post('/users', express.json(), async (req, res) => {
       [username, hash, fullName || null, userRole, towerId ? parsePositiveInt(towerId) : null, admin]
     );
     await recordAudit(req, 'admin_user_create', 'user', result.lastID, { username, role: userRole });
+    // Neuer Wachführer erhält die Demo-Konfiguration (Vorlagen-Türme) als Startbestand.
+    if (userRole === 'WACHFUEHRER') {
+      const n = await applyTowerTemplates(result.lastID);
+      if (n > 0) broadcast('towers-updated');
+    }
     res.status(201).json({ id: result.lastID, message: 'User created' });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -191,6 +220,98 @@ router.get('/audit-log', async (req, res) => {
   } catch (error) {
     console.error('Audit log error:', error);
     res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+// ── Demo-Konfiguration: Türme-Vorlage (tower_templates) ──────────────────────
+// Wird beim Anlegen jedes neuen Wachführer-Kontos als Start-Türme übernommen.
+
+// GET /api/admin/tower-templates
+router.get('/tower-templates', async (req, res) => {
+  try {
+    const rows = await dbAll('SELECT * FROM tower_templates ORDER BY name');
+    res.json({
+      templates: rows.map(t => ({
+        id: t.id, name: t.name, callSign: t.call_sign,
+        latitude: t.latitude, longitude: t.longitude, requiredStaff: t.required_staff
+      }))
+    });
+  } catch (error) {
+    console.error('List tower templates error:', error);
+    res.status(500).json({ error: 'Failed to list templates' });
+  }
+});
+
+// POST /api/admin/tower-templates
+router.post('/tower-templates', express.json(), async (req, res) => {
+  try {
+    const { name, callSign, latitude, longitude, requiredStaff } = req.body;
+    if (!name || typeof name !== 'string' || name.length > MAX_NAME_LEN) {
+      return res.status(400).json({ error: 'Ungültiger oder fehlender Name' });
+    }
+    const lat = parseCoord(latitude, 'lat');
+    const lng = parseCoord(longitude, 'lng');
+    if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
+    const result = await dbRun(
+      'INSERT INTO tower_templates (name, call_sign, latitude, longitude, required_staff) VALUES (?, ?, ?, ?, ?)',
+      [name, callSign || null, lat.value, lng.value, Number(requiredStaff) || 2]
+    );
+    await recordAudit(req, 'tower_template_create', 'tower_template', result.lastID, { name });
+    res.status(201).json({ id: result.lastID, message: 'Template created' });
+  } catch (error) {
+    console.error('Create tower template error:', error);
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+});
+
+// PATCH /api/admin/tower-templates/:id
+router.patch('/tower-templates/:id', express.json(), async (req, res) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ungültige Vorlagen-ID' });
+    const tpl = await dbGet('SELECT * FROM tower_templates WHERE id = ?', [id]);
+    if (!tpl) return res.status(404).json({ error: 'Template not found' });
+
+    const { name, callSign, latitude, longitude, requiredStaff } = req.body;
+    if (name !== undefined && (typeof name !== 'string' || !name || name.length > MAX_NAME_LEN)) {
+      return res.status(400).json({ error: 'Ungültiger Name' });
+    }
+    const lat = parseCoord(latitude, 'lat');
+    const lng = parseCoord(longitude, 'lng');
+    if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
+
+    await dbRun(
+      'UPDATE tower_templates SET name = ?, call_sign = ?, latitude = ?, longitude = ?, required_staff = ? WHERE id = ?',
+      [
+        name ?? tpl.name,
+        callSign ?? tpl.call_sign,
+        latitude !== undefined ? lat.value : tpl.latitude,
+        longitude !== undefined ? lng.value : tpl.longitude,
+        requiredStaff !== undefined ? Number(requiredStaff) || tpl.required_staff : tpl.required_staff,
+        id
+      ]
+    );
+    await recordAudit(req, 'tower_template_update', 'tower_template', id);
+    res.json({ id, message: 'Template updated' });
+  } catch (error) {
+    console.error('Update tower template error:', error);
+    res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// DELETE /api/admin/tower-templates/:id
+router.delete('/tower-templates/:id', async (req, res) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ungültige Vorlagen-ID' });
+    const tpl = await dbGet('SELECT id FROM tower_templates WHERE id = ?', [id]);
+    if (!tpl) return res.status(404).json({ error: 'Template not found' });
+    await dbRun('DELETE FROM tower_templates WHERE id = ?', [id]);
+    await recordAudit(req, 'tower_template_delete', 'tower_template', id);
+    res.json({ message: 'Template deleted' });
+  } catch (error) {
+    console.error('Delete tower template error:', error);
+    res.status(500).json({ error: 'Failed to delete template' });
   }
 });
 

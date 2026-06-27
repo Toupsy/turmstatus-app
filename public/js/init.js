@@ -86,6 +86,11 @@ function wireEvents() {
   document.getElementById('boat-modal-cancel').onclick = () => closeModal('boat-modal');
   document.getElementById('boat-modal-save').onclick = saveBoat;
 
+  // Demo-Konfiguration (Vorlagen-Türme, Admin)
+  document.getElementById('btn-new-template').onclick = () => openTemplateModal(null);
+  document.getElementById('template-modal-cancel').onclick = () => closeModal('template-modal');
+  document.getElementById('template-modal-save').onclick = saveTemplate;
+
   // Klick auf Modal-Hintergrund schließt
   document.querySelectorAll('.modal').forEach(m => {
     m.addEventListener('click', (e) => { if (e.target === m && m.id !== 'login-modal') m.style.display = 'none'; });

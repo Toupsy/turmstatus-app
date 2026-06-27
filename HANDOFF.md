@@ -9,6 +9,19 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Demo-Konfiguration: Vorlagen-Türme für neue Wachführer)
+- Neue Tabelle **`tower_templates`** (`db/schema.sql`, via `CREATE TABLE IF NOT EXISTS` auch auf
+  Bestands-DBs). Der **App-Admin** pflegt darüber eine **Demo-Konfiguration** von Türmen.
+- **Vererbung:** Beim Anlegen eines **neuen Wachführer-Kontos** (`POST /api/admin/users`,
+  role=WACHFUEHRER) werden alle Vorlagen-Türme via `applyTowerTemplates()` als Start-Türme in
+  den Scope des neuen WF kopiert (`towers.owner_id = neuer WF`). Bereits bestehende WF bleiben
+  unberührt.
+- **API (admin-gated):** `GET/POST/PATCH/DELETE /api/admin/tower-templates` in `api/admin.js`.
+- **UI:** Panel „Demo-Konfiguration · Türme" im Verwaltung-Tab (nur Admin) + Vorlagen-Modal
+  (`Turmstatus.html`, `views.js`: `renderTowerTemplates`/`openTemplateModal`/`saveTemplate`/
+  `deleteTemplate`, `state.js:towerTemplates`, `init.js`).
+- **Tests:** Vorlagen-CRUD admin-only (WF → 403) + neuer WF erbt Vorlage; `npm test` → **28/28 grün**.
+
 ## Zuletzt (Mandanten-Modell: vollständige Scope-Isolation pro Wachführer + Karte auf Dahme)
 **Vom Nutzer bestätigte Zielarchitektur** (deckungsgleich zum Wachplan-Generator, wo jeder
 Wachführer-Account nur seine eigenen Daten verwaltet): **Jeder Wachführer ist ein eigener

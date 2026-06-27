@@ -38,6 +38,10 @@ async function refreshAdmin() {
     users = (await apiGet('/api/admin/users')).users;
     renderUsers();
     try {
+      towerTemplates = (await apiGet('/api/admin/tower-templates')).templates;
+      renderTowerTemplates();
+    } catch (e) { /* ignore */ }
+    try {
       const a = await apiGet('/api/admin/audit-log?limit=200');
       renderAudit(a.entries);
     } catch (e) { /* ignore */ }
@@ -620,6 +624,91 @@ async function saveUser() {
 async function deleteUser(id) {
   if (!confirm('Benutzer wirklich löschen?')) return;
   try { await apiDelete(userApiBase() + '/' + id); showToast('Gelöscht'); refreshAdmin(); }
+  catch (err) { showToast(err.message); }
+}
+
+// ── Demo-Konfiguration · Vorlagen-Türme (Admin) ──────────────
+function renderTowerTemplates() {
+  const panel = document.getElementById('tower-template-panel');
+  if (panel) panel.style.display = canManage() ? '' : 'none';
+  if (!canManage()) return;
+  const el = document.getElementById('template-table');
+  if (!el) return;
+  if (!towerTemplates.length) {
+    el.innerHTML = '<p class="muted">Noch keine Vorlagen-Türme. Neue Wachführer starten dann ohne Türme.</p>';
+    return;
+  }
+  const rows = towerTemplates.map(t => {
+    const pos = (t.latitude != null && t.longitude != null)
+      ? `${t.latitude.toFixed(4)}, ${t.longitude.toFixed(4)}` : '<span class="muted">nicht gesetzt</span>';
+    return `
+    <tr>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.callSign || '–')}</td>
+      <td>${t.requiredStaff}</td>
+      <td>${pos}</td>
+      <td class="row-actions">
+        <button onclick="openTemplateById(${t.id})">Bearbeiten</button>
+        <button class="danger" onclick="deleteTemplate(${t.id})">Löschen</button>
+      </td>
+    </tr>`; }).join('');
+  el.innerHTML =
+    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Soll</th><th>Position</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function openTemplateModal(tpl) {
+  document.getElementById('template-modal-error').textContent = '';
+  if (tpl && tpl.id) {
+    document.getElementById('template-modal-title').textContent = 'Vorlagen-Turm bearbeiten';
+    document.getElementById('template-modal-id').value = tpl.id;
+    document.getElementById('template-modal-name').value = tpl.name || '';
+    document.getElementById('template-modal-callsign').value = tpl.callSign || '';
+    document.getElementById('template-modal-staff').value = tpl.requiredStaff || 2;
+    document.getElementById('template-modal-lat').value = tpl.latitude != null ? tpl.latitude : '';
+    document.getElementById('template-modal-lng').value = tpl.longitude != null ? tpl.longitude : '';
+  } else {
+    document.getElementById('template-modal-title').textContent = 'Vorlagen-Turm anlegen';
+    document.getElementById('template-modal-id').value = '';
+    document.getElementById('template-modal-name').value = '';
+    document.getElementById('template-modal-callsign').value = '';
+    document.getElementById('template-modal-staff').value = 2;
+    document.getElementById('template-modal-lat').value = '';
+    document.getElementById('template-modal-lng').value = '';
+  }
+  openModal('template-modal');
+}
+
+function openTemplateById(id) {
+  const t = towerTemplates.find(x => x.id === id);
+  if (t) openTemplateModal(t);
+}
+
+async function saveTemplate() {
+  const id = document.getElementById('template-modal-id').value;
+  const errEl = document.getElementById('template-modal-error');
+  const name = document.getElementById('template-modal-name').value.trim();
+  if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
+  const latRaw = document.getElementById('template-modal-lat').value;
+  const lngRaw = document.getElementById('template-modal-lng').value;
+  const payload = {
+    name,
+    callSign: document.getElementById('template-modal-callsign').value.trim() || null,
+    requiredStaff: Number(document.getElementById('template-modal-staff').value) || 2,
+    latitude: latRaw === '' ? null : Number(latRaw),
+    longitude: lngRaw === '' ? null : Number(lngRaw)
+  };
+  try {
+    if (id) await apiPatch('/api/admin/tower-templates/' + id, payload);
+    else await apiPost('/api/admin/tower-templates', payload);
+    closeModal('template-modal');
+    showToast('Vorlage gespeichert');
+    refreshAdmin();
+  } catch (err) { errEl.textContent = err.message; }
+}
+
+async function deleteTemplate(id) {
+  if (!confirm('Vorlagen-Turm wirklich löschen?')) return;
+  try { await apiDelete('/api/admin/tower-templates/' + id); showToast('Vorlage gelöscht'); refreshAdmin(); }
   catch (err) { showToast(err.message); }
 }
 
