@@ -21,6 +21,48 @@ Wachgänger jetzt **direkt als Zahl melden**, ganz ohne pro WG ein Konto anzuleg
 - **Test:** `api.test.js` deckt das Hoch-/Runtermelden, die Farb-Schwellen ohne jedes WG-Konto und
   die Klammerung negativer Werte ab.
 
+## Admin positioniert Türme + Boote in der Standard-Config (Vorlagen-Boote + Demo-Karte)
+
+Bisher konnte der App-Admin nur **Vorlagen-Türme** (`tower_templates`) als Standard-Config pflegen,
+und Positionen nur über Zahlenfelder. Neu kann er auch **Boote** vorkonfigurieren und beide
+**direkt auf einer Karte positionieren** – diese Positionen erbt jeder **neue** Wachführer.
+- **Vorlagen-Boote (`boat_templates`):** neue Admin-gepflegte Tabelle (name, call_sign, status,
+  latitude, longitude). API `GET/POST/PATCH/DELETE /api/admin/boat-templates` (admin-gated;
+  Wachführer → 403; Status- und Koordinaten-Validierung wie bei den Turm-Vorlagen).
+- **Vererbung beim Anlegen:** `POST /api/admin/users` mit role=WACHFUEHRER klont die Vorlagen-Boote
+  via `applyBoatTemplates()` in den Scope des neuen Wachführers (`boats.owner_id`) – **ohne**
+  Turm-Zuordnung (`tower_id = NULL`), die der Wachführer später selbst vornimmt. Läuft neben der
+  bestehenden Turm-Vererbung; bestehende Wachführer bleiben unverändert.
+- **Demo-Konfigurations-Karte:** im Verwaltung-Tab eine eigene Leaflet-Karte (`#template-map`).
+  Vorlagen-Türme (📍) und -Boote (⛵) sind **verschiebbare Marker** – ein **Drag** speichert die
+  neue Position per PATCH (`moveTowerTemplate`/`moveBoatTemplate`). Ein **Rechtsklick** auf die
+  Karte legt einen Vorlagen-Turm/-Boot an der angeklickten Stelle an (Modal mit vorbefüllter
+  lat/lng). Das Kontextmenü ist nun generisch (`openMapContextMenu()`) und wird von Einsatz- und
+  Demo-Karte geteilt (`map.js`: `initTemplateMap`/`renderTemplateMap`).
+- **UI:** Panels „Demo-Konfiguration · Karte/Boote" + Vorlagen-Boot-Modal; Tabellen mit
+  Bearbeiten/Löschen wie bei den Turm-Vorlagen (`views.js`, `Turmstatus.html`, `init.js`,
+  `state.js:boatTemplates`).
+
+## Cloudflare-Worker-Preview ohne Login (Demo-Modus)
+
+Übernahme der Preview-Infrastruktur vom Schwester-Projekt **Wachplan-Generator**: Jeder Pull
+Request (und Push auf `main`) wird per GitHub Action als **Cloudflare Worker** unter
+`https://pr-<NR>.turmstatus-preview.workers.dev` deployt; ein Bot kommentiert die URL im PR.
+
+- **`src/worker.js`** serviert die statischen Dateien (Cloudflare Assets), proxied `/api/*` in
+  Production zum Origin-Server und liefert in der Preview dafür 503. Er injiziert
+  `window.WORKER_ENVIRONMENT` und macht den SPA-Fallback auf `Turmstatus.html`.
+- **`public/js/preview.js`** (neu): Da Turmstatus **backend-getrieben** ist (im Gegensatz zum
+  localStorage-Offline-Modus des Wachplan-Generators), läuft die Preview gegen einen
+  **In-Memory-Demo-Datensatz**. `PREVIEW_MODE` (Flag vom Worker **oder** `*.workers.dev`-Host)
+  schaltet `api.js` von `fetch()` auf den Mock `previewRequest()`, gibt über `/api/auth/me`
+  einen Demo-**Wachführer** zurück (→ **kein Login**) und deaktiviert den WebSocket; Mutationen
+  lösen stattdessen `_handleEvent()` direkt aus (gleiche Refresh-Logik wie ein Broadcast).
+- Demo-Datensatz: 4 Türme, 7 Wachgänger, 2 Boote, Anfragen, eine Kontrollfahrt, Team rund um das
+  Map-Zentrum. **Voll interaktiv**, aber flüchtig (Reload = Reset, keine Persistenz).
+- `wrangler.toml`, `.github/workflows/deploy-preview.yml`, `npm run deploy[:dev]` + Doku
+  `docs/CLOUDFLARE_WORKER.md`. Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
 ## Rechtsklick auf der Karte: Turm/Boot direkt platzieren + Boot-Position
 
 Bisher war die Turm-Platzierung wenig intuitiv (Button „📍 Turm auf Karte setzen" → Linksklick).

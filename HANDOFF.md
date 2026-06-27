@@ -23,6 +23,43 @@ auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammen
 - **Test:** neuer `api.test.js`-Fall (Hoch-/Runtermelden, Farb-Schwellen ohne WG-Konto,
   Negativ-Klammerung). `npm test` → **29/29 grün**.
 
+## Zuletzt (Admin positioniert Türme + Boote in der Standard-Config + Vorlagen-Boote)
+- **Vorlagen-Boote (`boat_templates`)** als Pendant zu `tower_templates`: neue Tabelle
+  (`db/schema.sql`, greift via `CREATE TABLE IF NOT EXISTS` auch auf Bestands-DBs). Felder:
+  name, call_sign, status, latitude, longitude. Admin-CRUD `GET/POST/PATCH/DELETE
+  /api/admin/boat-templates` (`api/admin.js`, admin-gated, Status-/Koordinaten-Validierung).
+- **Vererbung:** Beim Anlegen eines neuen WF-Kontos klont `applyBoatTemplates()` die
+  Vorlagen-Boote in dessen Scope (`boats.owner_id = neuer WF`) – **ohne** Turm-Zuordnung
+  (`tower_id = NULL`); der WF ordnet sie später eigenen Türmen zu. Läuft neben
+  `applyTowerTemplates()` in `POST /api/admin/users`; broadcastet `towers-/boats-updated`.
+- **Demo-Konfigurations-Karte (Admin):** zweite Leaflet-Instanz im Verwaltung-Tab
+  (`#template-map`, `map.js`: `initTemplateMap`/`renderTemplateMap`). Vorlagen-Türme (📍) und
+  -Boote (⛵) sind **verschiebbare** Marker → Drag schreibt die Position per PATCH zurück
+  (`moveTowerTemplate`/`moveBoatTemplate`). **Rechtsklick** auf die Karte legt einen
+  Vorlagen-Turm/-Boot an der Stelle an (Modal mit vorbefüllter lat/lng). Kontextmenü generisch
+  via `openMapContextMenu()` (Einsatz- + Demo-Karte teilen sich `#map-context-menu`).
+- **UI:** Panels „Demo-Konfiguration · Karte/Boote" + Vorlagen-Boot-Modal
+  (`Turmstatus.html`); `views.js`: `renderBoatTemplates`/`openBoatTemplateModal`/
+  `saveBoatTemplate`/`deleteBoatTemplate`; `state.js:boatTemplates`, `_templateMap`;
+  `init.js` verdrahtet Buttons + initialisiert die Karte beim Öffnen des Verwaltung-Tabs.
+- **Tests:** Vorlagen-Boot-CRUD admin-only (WF → 403), Positions-PATCH, neuer WF erbt
+  Vorlagen-Boot inkl. Position ohne Turm. `npm test` → **29/29 grün**.
+
+## Zuletzt (Cloudflare-Worker-Preview ohne Login – Demo-Modus)
+- **Infrastruktur vom Wachplan-Generator übernommen:** `src/worker.js` (Assets + API-Proxy +
+  SPA-Fallback + `window.WORKER_ENVIRONMENT`), `wrangler.toml`, `.github/workflows/deploy-preview.yml`
+  (PR → `pr-<NR>.turmstatus-preview.workers.dev`, Bot-Kommentar), `npm run deploy[:dev]`,
+  Doku `docs/CLOUDFLARE_WORKER.md`. Secrets nötig: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+- **Unterschied zum Schwester-Projekt:** Turmstatus ist backend-getrieben → die Preview hat kein
+  Backend, sondern einen **In-Memory-Demo-Datensatz**. Neu: `public/js/preview.js` mit
+  `PREVIEW_MODE` (Worker-Flag **oder** `*.workers.dev`) + Mock `previewRequest()`.
+  `api.js`/`auth.js`/`ws.js` prüfen `PREVIEW_MODE`: kein `fetch`, Demo-Wachführer via
+  `/api/auth/me` (→ **kein Login**), WebSocket aus (Mutationen → `_handleEvent()` direkt).
+  Geladen in `Turmstatus.html` zwischen `utils.js` und `api.js`.
+- **Status:** voll interaktiv (Türme/Boote/-1/+1/Kontrollfahrt), flüchtig (Reload = Reset).
+  Alle vom Frontend genutzten Endpunkte sind gemockt (Admin-only-Routen nicht nötig, Demo-User =
+  Wachführer). `npm test` → **28/28 grün**. Smoke-Test des Mocks bestanden.
+
 ## Zuletzt (Rechtsklick-Platzierung auf der Karte: Turm/Boot + Boot-Position)
 - **Rechtsklick-Kontextmenü** auf der Einsatzkarte (nur Wachführer): „📍 Turm hier anlegen" /
   „⛵ Boot hier anlegen" öffnet das jeweilige Modal mit **vorbefüllter lat/lng** an der

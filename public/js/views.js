@@ -39,7 +39,10 @@ async function refreshAdmin() {
     renderUsers();
     try {
       towerTemplates = (await apiGet('/api/admin/tower-templates')).templates;
+      boatTemplates = (await apiGet('/api/admin/boat-templates')).templates;
       renderTowerTemplates();
+      renderBoatTemplates();
+      renderTemplateMap();
     } catch (e) { /* ignore */ }
     try {
       const a = await apiGet('/api/admin/audit-log?limit=200');
@@ -690,7 +693,7 @@ function renderTowerTemplates() {
     `<table><thead><tr><th>Turm</th><th>Funk</th><th>Soll</th><th>Position</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function openTemplateModal(tpl) {
+function openTemplateModal(tpl, lat, lng) {
   document.getElementById('template-modal-error').textContent = '';
   if (tpl && tpl.id) {
     document.getElementById('template-modal-title').textContent = 'Vorlagen-Turm bearbeiten';
@@ -706,8 +709,8 @@ function openTemplateModal(tpl) {
     document.getElementById('template-modal-name').value = '';
     document.getElementById('template-modal-callsign').value = '';
     document.getElementById('template-modal-staff').value = 2;
-    document.getElementById('template-modal-lat').value = '';
-    document.getElementById('template-modal-lng').value = '';
+    document.getElementById('template-modal-lat').value = lat != null ? lat : '';
+    document.getElementById('template-modal-lng').value = lng != null ? lng : '';
   }
   openModal('template-modal');
 }
@@ -743,6 +746,105 @@ async function saveTemplate() {
 async function deleteTemplate(id) {
   if (!confirm('Vorlagen-Turm wirklich löschen?')) return;
   try { await apiDelete('/api/admin/tower-templates/' + id); showToast('Vorlage gelöscht'); refreshAdmin(); }
+  catch (err) { showToast(err.message); }
+}
+
+// ── Demo-Konfiguration · Vorlagen-Boote (Admin) ──────────────
+function renderBoatTemplates() {
+  const panel = document.getElementById('boat-template-panel');
+  if (panel) panel.style.display = canManage() ? '' : 'none';
+  if (!canManage()) return;
+  const el = document.getElementById('boat-template-table');
+  if (!el) return;
+  if (!boatTemplates.length) {
+    el.innerHTML = '<p class="muted">Noch keine Vorlagen-Boote. Neue Wachführer starten dann ohne Boote.</p>';
+    return;
+  }
+  const rows = boatTemplates.map(b => {
+    const pos = (b.latitude != null && b.longitude != null)
+      ? `${b.latitude.toFixed(4)}, ${b.longitude.toFixed(4)}` : '<span class="muted">nicht gesetzt</span>';
+    return `
+    <tr>
+      <td>${escapeHtml(b.name)}</td>
+      <td>${escapeHtml(b.callSign || '–')}</td>
+      <td>${escapeHtml(labelOf('boatStatus', b.status))}</td>
+      <td>${pos}</td>
+      <td class="row-actions">
+        <button onclick="openBoatTemplateById(${b.id})">Bearbeiten</button>
+        <button class="danger" onclick="deleteBoatTemplate(${b.id})">Löschen</button>
+      </td>
+    </tr>`; }).join('');
+  el.innerHTML =
+    `<table><thead><tr><th>Boot</th><th>Funk</th><th>Status</th><th>Position</th><th>Aktion</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function openBoatTemplateModal(tpl, lat, lng) {
+  document.getElementById('boat-template-modal-error').textContent = '';
+  // Status-Auswahl füllen
+  const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
+  const statusSel = document.getElementById('boat-template-modal-status');
+  statusSel.innerHTML = statusKeys.map(k => `<option value="${k}">${escapeHtml(labelOf('boatStatus', k))}</option>`).join('');
+  if (tpl && tpl.id) {
+    document.getElementById('boat-template-modal-title').textContent = 'Vorlagen-Boot bearbeiten';
+    document.getElementById('boat-template-modal-id').value = tpl.id;
+    document.getElementById('boat-template-modal-name').value = tpl.name || '';
+    document.getElementById('boat-template-modal-callsign').value = tpl.callSign || '';
+    statusSel.value = tpl.status || 'AT_TOWER';
+    document.getElementById('boat-template-modal-lat').value = tpl.latitude != null ? tpl.latitude : '';
+    document.getElementById('boat-template-modal-lng').value = tpl.longitude != null ? tpl.longitude : '';
+  } else {
+    document.getElementById('boat-template-modal-title').textContent = 'Vorlagen-Boot anlegen';
+    document.getElementById('boat-template-modal-id').value = '';
+    document.getElementById('boat-template-modal-name').value = '';
+    document.getElementById('boat-template-modal-callsign').value = '';
+    statusSel.value = 'AT_TOWER';
+    document.getElementById('boat-template-modal-lat').value = lat != null ? lat : '';
+    document.getElementById('boat-template-modal-lng').value = lng != null ? lng : '';
+  }
+  openModal('boat-template-modal');
+}
+
+function openBoatTemplateById(id) {
+  const b = boatTemplates.find(x => x.id === id);
+  if (b) openBoatTemplateModal(b);
+}
+
+async function saveBoatTemplate() {
+  const id = document.getElementById('boat-template-modal-id').value;
+  const errEl = document.getElementById('boat-template-modal-error');
+  const name = document.getElementById('boat-template-modal-name').value.trim();
+  if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
+  const latRaw = document.getElementById('boat-template-modal-lat').value;
+  const lngRaw = document.getElementById('boat-template-modal-lng').value;
+  const payload = {
+    name,
+    callSign: document.getElementById('boat-template-modal-callsign').value.trim() || null,
+    status: document.getElementById('boat-template-modal-status').value,
+    latitude: latRaw === '' ? null : Number(latRaw),
+    longitude: lngRaw === '' ? null : Number(lngRaw)
+  };
+  try {
+    if (id) await apiPatch('/api/admin/boat-templates/' + id, payload);
+    else await apiPost('/api/admin/boat-templates', payload);
+    closeModal('boat-template-modal');
+    showToast('Vorlage gespeichert');
+    refreshAdmin();
+  } catch (err) { errEl.textContent = err.message; }
+}
+
+async function deleteBoatTemplate(id) {
+  if (!confirm('Vorlagen-Boot wirklich löschen?')) return;
+  try { await apiDelete('/api/admin/boat-templates/' + id); showToast('Vorlage gelöscht'); refreshAdmin(); }
+  catch (err) { showToast(err.message); }
+}
+
+// Karten-Drag (Admin) verschiebt eine Vorlage → PATCH der Position.
+async function moveTowerTemplate(id, lat, lng) {
+  try { await apiPatch('/api/admin/tower-templates/' + id, { latitude: lat, longitude: lng }); showToast('Position gespeichert'); refreshAdmin(); }
+  catch (err) { showToast(err.message); }
+}
+async function moveBoatTemplate(id, lat, lng) {
+  try { await apiPatch('/api/admin/boat-templates/' + id, { latitude: lat, longitude: lng }); showToast('Position gespeichert'); refreshAdmin(); }
   catch (err) { showToast(err.message); }
 }
 

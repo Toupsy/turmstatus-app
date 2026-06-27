@@ -22,6 +22,9 @@ function _handleEvent(type) {
 }
 
 function wsConnect() {
+  // Preview-/Demo-Modus: kein Backend → kein WebSocket (Mutationen lösen
+  // _handleEvent() direkt in preview.js aus).
+  if (typeof PREVIEW_MODE !== 'undefined' && PREVIEW_MODE) return;
   if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return;
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   try { _ws = new WebSocket(`${proto}//${location.host}/api/ws`); }

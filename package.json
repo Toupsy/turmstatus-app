@@ -1,6 +1,6 @@
 {
   "name": "turmstatus-app",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Turmstatus – digitales Wach- und Statussystem für Wasserrettung (Express + SQLite + Vanilla JS)",
   "main": "server/server.js",
   "scripts": {
@@ -8,7 +8,9 @@
     "start": "node server/server.js",
     "start:admin": "node server/admin-server.js",
     "dev": "node server/server.js",
-    "dev:admin": "node server/admin-server.js"
+    "dev:admin": "node server/admin-server.js",
+    "deploy": "npx wrangler deploy",
+    "deploy:dev": "npx wrangler deploy --env development"
   },
   "keywords": [
     "DLRG",
