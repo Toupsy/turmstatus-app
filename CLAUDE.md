@@ -88,7 +88,7 @@ init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung
 ```
 users   id, username, password_hash, full_name, role[HAUPTWACHE|WACHFUEHRER|WACHGAENGER|BOOTSFUEHRER],
         tower_id(FK, informative Stationierung), owner_id(FK→users, Mandant: Wachführer dieses Personals), is_admin, is_active, last_login, created_at, updated_at
-towers  id, name, call_sign, latitude, longitude, required_staff, owner_id(FK→users, Eigentümer-Wachführer), created_at
+towers  id, name, call_sign, latitude, longitude, required_staff, present_staff(manuelle Ist-Besetzung: WF meldet anwesende WG ohne eigene Accounts), owner_id(FK→users, Eigentümer-Wachführer), created_at
 tower_templates  id, name, call_sign, latitude, longitude, required_staff, created_at  (Demo-Konfiguration: Admin-gepflegt, bei WF-Anlage in towers(owner_id) kopiert)
 guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, owner_id(FK→users), updated_at
 boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], lat, lng, owner_id(FK→users), updated_at
@@ -100,8 +100,11 @@ control_trip_requests  id, boat_id(FK), requested_by(FK), note, status[PENDING|A
                     rejection_reason, created_at, decided_at, decided_by(FK)
 audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_address, timestamp
 ```
-**Turmfarbe (`status.js`):** besetzt = Wachgänger mit Status `IN_AREA`.
-`GREEN` ≥ Sollstärke, `YELLOW` ≥ 50 %, sonst `RED`.
+**Turmfarbe (`status.js`):** besetzt (`currentStaff`) = Wachgänger mit Status `IN_AREA`
+(`guardStaff`) **+** manuell vom Wachführer gemeldete Anwesende (`towers.present_staff`).
+So kann ein WF die Ist-Stärke direkt als Zahl melden, ohne für jeden WG ein Konto/Guard-Objekt
+anzulegen (`+/-`-Stepper in Tabelle & Karten-Popup; Feld im Turm-Modal). `GREEN` ≥ Sollstärke,
+`YELLOW` ≥ 50 %, sonst `RED`.
 **Mandanten-Modell (Scope-Isolation – wie Wachplan-Generator):** Jeder **Wachführer ist ein
 eigener Mandant**. Jedes Domänenobjekt (Turm/Boot/Wachgänger) und jedes Personal-Konto trägt
 `owner_id` = der besitzende Wachführer. Ein Wachführer **sieht/verwaltet/genehmigt nur sein

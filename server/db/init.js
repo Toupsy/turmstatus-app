@@ -179,6 +179,10 @@ function initDatabase() {
           // verknüpft Wachpersonal mit seinem Wachführer. Idempotent (ALTER ignoriert Fehler).
           db.run("ALTER TABLE users ADD COLUMN owner_id INTEGER", () => {});
           db.run("ALTER TABLE towers ADD COLUMN owner_id INTEGER", () => {});
+
+          // Manuelle Ist-Besetzung: Der Wachführer meldet die Anzahl aktuell anwesender
+          // Wachgänger direkt als Zahl, ohne dass je WG ein Account/Guard-Objekt nötig ist.
+          db.run("ALTER TABLE towers ADD COLUMN present_staff INTEGER NOT NULL DEFAULT 0", () => {});
           db.run("ALTER TABLE guards ADD COLUMN owner_id INTEGER", () => {});
           db.run("ALTER TABLE boats ADD COLUMN owner_id INTEGER", () => {});
 

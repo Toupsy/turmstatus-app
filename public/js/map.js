@@ -126,7 +126,11 @@ function renderMap() {
       `Status: ${escapeHtml(labelOf('towerStatus', t.status))}<br>` +
       `Besetzung: ${t.currentStaff}/${t.requiredStaff}`;
     if (canEditTowers) {
-      popup += `<br><div style="margin-top:6px;display:flex;gap:6px">` +
+      popup += `<br><div style="margin-top:6px;display:flex;align-items:center;gap:6px">` +
+        `Anwesend: <button onclick="adjustTowerPresent(${t.id}, -1)" ${t.presentStaff <= 0 ? 'disabled' : ''}>−</button>` +
+        `<b>${t.presentStaff}</b>` +
+        `<button onclick="adjustTowerPresent(${t.id}, 1)">+</button></div>`;
+      popup += `<div style="margin-top:6px;display:flex;gap:6px">` +
         `<button onclick="openTowerById(${t.id})">Bearbeiten</button>` +
         `<button class="danger" onclick="deleteTower(${t.id})">Löschen</button></div>`;
       const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status), draggable: true });

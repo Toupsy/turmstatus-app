@@ -98,11 +98,20 @@ function renderTowers() {
     const actions = canEdit
       ? `<button onclick="openTowerById(${t.id})">Bearbeiten</button>
          <button class="danger" onclick="deleteTower(${t.id})">Löschen</button>` : '';
+    // Wachführer kann die anwesenden Wachgänger direkt per +/- melden (ohne Accounts).
+    const staffCell = canEdit
+      ? `${t.currentStaff}/${t.requiredStaff}
+         <span class="present-stepper" title="Anwesende Wachgänger melden">
+           <button onclick="adjustTowerPresent(${t.id}, -1)" ${t.presentStaff <= 0 ? 'disabled' : ''}>−</button>
+           <span>${t.presentStaff}</span>
+           <button onclick="adjustTowerPresent(${t.id}, 1)">+</button>
+         </span>`
+      : `${t.currentStaff}/${t.requiredStaff}`;
     return `
     <tr>
       <td>${escapeHtml(t.name)}</td>
       <td>${escapeHtml(t.callSign || '–')}</td>
-      <td>${t.currentStaff}/${t.requiredStaff}</td>
+      <td>${staffCell}</td>
       <td>${statusPill('towerStatus', t.status)}</td>
       <td>${pos}</td>
       ${canEdit ? `<td class="row-actions">${actions}</td>` : ''}
@@ -122,6 +131,7 @@ function openTowerModal(tower, lat, lng) {
     document.getElementById('tower-modal-name').value = tower.name || '';
     document.getElementById('tower-modal-callsign').value = tower.callSign || '';
     document.getElementById('tower-modal-staff').value = tower.requiredStaff || 2;
+    document.getElementById('tower-modal-present').value = tower.presentStaff != null ? tower.presentStaff : 0;
     document.getElementById('tower-modal-lat').value = tower.latitude != null ? tower.latitude : '';
     document.getElementById('tower-modal-lng').value = tower.longitude != null ? tower.longitude : '';
     if (posHint) posHint.style.display = 'none';
@@ -131,6 +141,7 @@ function openTowerModal(tower, lat, lng) {
     document.getElementById('tower-modal-name').value = '';
     document.getElementById('tower-modal-callsign').value = '';
     document.getElementById('tower-modal-staff').value = 2;
+    document.getElementById('tower-modal-present').value = 0;
     document.getElementById('tower-modal-lat').value = lat != null ? lat.toFixed(5) : '';
     document.getElementById('tower-modal-lng').value = lng != null ? lng.toFixed(5) : '';
     if (posHint) posHint.style.display = (lat != null) ? 'block' : 'none';
@@ -154,6 +165,7 @@ async function saveTower() {
     name,
     callSign: document.getElementById('tower-modal-callsign').value.trim() || null,
     requiredStaff: Number(document.getElementById('tower-modal-staff').value) || 2,
+    presentStaff: Math.max(0, Number(document.getElementById('tower-modal-present').value) || 0),
     latitude: latRaw === '' ? null : Number(latRaw),
     longitude: lngRaw === '' ? null : Number(lngRaw)
   };
@@ -168,6 +180,16 @@ async function saveTower() {
 // Position nach Drag des Karten-Markers speichern.
 async function moveTower(id, lat, lng) {
   try { await apiPatch('/api/towers/' + id, { latitude: lat, longitude: lng }); showToast('Turm verschoben'); }
+  catch (err) { showToast(err.message); refreshTowers(); }
+}
+
+// Anwesende Wachgänger eines Turms um delta (±1) anpassen – Ist-Besetzung ohne Accounts.
+async function adjustTowerPresent(id, delta) {
+  const t = towers.find(x => x.id === id);
+  if (!t) return;
+  const next = Math.max(0, Math.min(99, (t.presentStaff || 0) + delta));
+  if (next === t.presentStaff) return;
+  try { await apiPatch('/api/towers/' + id, { presentStaff: next }); }
   catch (err) { showToast(err.message); refreshTowers(); }
 }
 
