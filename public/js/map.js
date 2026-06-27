@@ -4,14 +4,36 @@
 
 const TOWER_COLORS = { GREEN: '#3ec98a', YELLOW: '#ffb347', RED: '#ff5a4d' };
 
+function _mapConfig() {
+  return (appConfig && appConfig.map) || {};
+}
+
+function _configuredMapBounds() {
+  const bounds = _mapConfig().bounds;
+  if (!Array.isArray(bounds) || bounds.length !== 2) return null;
+  return L.latLngBounds(bounds[0], bounds[1]);
+}
+
 function initMap() {
   if (_map) return;
   // Fallback-Zentrum: DLRG Hauptwache Dahme (Strandpromenade), falls /api/config fehlt.
-  const center = (appConfig && appConfig.map && appConfig.map.center) || [54.21449, 11.08967];
-  const zoom = (appConfig && appConfig.map && appConfig.map.zoom) || 15;
-  _map = L.map('map').setView(center, zoom);
+  const mapConfig = _mapConfig();
+  const center = mapConfig.center || [54.21449, 11.08967];
+  const zoom = mapConfig.zoom || 15;
+  const mapBounds = _configuredMapBounds();
+  const mapOptions = {
+    minZoom: mapConfig.minZoom || 7,
+    worldCopyJump: false
+  };
+  if (mapBounds) {
+    mapOptions.maxBounds = mapBounds;
+    mapOptions.maxBoundsViscosity = 1;
+  }
+  _map = L.map('map', mapOptions).setView(center, zoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    noWrap: true,
+    bounds: mapBounds,
     attribution: '© OpenStreetMap'
   }).addTo(_map);
   _markerLayer = L.layerGroup().addTo(_map);
@@ -215,11 +237,24 @@ function initTemplateMap() {
   if (_templateMap) { _templateMap.invalidateSize(); return; }
   const elMap = document.getElementById('template-map');
   if (!elMap || typeof L === 'undefined') return;
-  const center = (appConfig && appConfig.map && appConfig.map.center) || [54.21449, 11.08967];
-  const zoom = (appConfig && appConfig.map && appConfig.map.zoom) || 15;
-  _templateMap = L.map('template-map').setView(center, zoom);
+  const mapConfig = _mapConfig();
+  const center = mapConfig.center || [54.21449, 11.08967];
+  const zoom = mapConfig.zoom || 15;
+  const mapBounds = _configuredMapBounds();
+  const mapOptions = {
+    minZoom: mapConfig.minZoom || 7,
+    worldCopyJump: false
+  };
+  if (mapBounds) {
+    mapOptions.maxBounds = mapBounds;
+    mapOptions.maxBoundsViscosity = 1;
+  }
+  _templateMap = L.map('template-map', mapOptions).setView(center, zoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap'
+    maxZoom: 19,
+    noWrap: true,
+    bounds: mapBounds,
+    attribution: '© OpenStreetMap'
   }).addTo(_templateMap);
   _templateMarkerLayer = L.layerGroup().addTo(_templateMap);
 
