@@ -2,6 +2,26 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Cloudflare-Worker-Preview ohne Login (Demo-Modus)
+
+Übernahme der Preview-Infrastruktur vom Schwester-Projekt **Wachplan-Generator**: Jeder Pull
+Request (und Push auf `main`) wird per GitHub Action als **Cloudflare Worker** unter
+`https://pr-<NR>.turmstatus-preview.workers.dev` deployt; ein Bot kommentiert die URL im PR.
+
+- **`src/worker.js`** serviert die statischen Dateien (Cloudflare Assets), proxied `/api/*` in
+  Production zum Origin-Server und liefert in der Preview dafür 503. Er injiziert
+  `window.WORKER_ENVIRONMENT` und macht den SPA-Fallback auf `Turmstatus.html`.
+- **`public/js/preview.js`** (neu): Da Turmstatus **backend-getrieben** ist (im Gegensatz zum
+  localStorage-Offline-Modus des Wachplan-Generators), läuft die Preview gegen einen
+  **In-Memory-Demo-Datensatz**. `PREVIEW_MODE` (Flag vom Worker **oder** `*.workers.dev`-Host)
+  schaltet `api.js` von `fetch()` auf den Mock `previewRequest()`, gibt über `/api/auth/me`
+  einen Demo-**Wachführer** zurück (→ **kein Login**) und deaktiviert den WebSocket; Mutationen
+  lösen stattdessen `_handleEvent()` direkt aus (gleiche Refresh-Logik wie ein Broadcast).
+- Demo-Datensatz: 4 Türme, 7 Wachgänger, 2 Boote, Anfragen, eine Kontrollfahrt, Team rund um das
+  Map-Zentrum. **Voll interaktiv**, aber flüchtig (Reload = Reset, keine Persistenz).
+- `wrangler.toml`, `.github/workflows/deploy-preview.yml`, `npm run deploy[:dev]` + Doku
+  `docs/CLOUDFLARE_WORKER.md`. Secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
 ## Rechtsklick auf der Karte: Turm/Boot direkt platzieren + Boot-Position
 
 Bisher war die Turm-Platzierung wenig intuitiv (Button „📍 Turm auf Karte setzen" → Linksklick).

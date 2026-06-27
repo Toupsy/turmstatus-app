@@ -71,14 +71,15 @@ api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTS
 ```
 state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map, _addTowerMode); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
 utils.js   escapeHtml, showToast, fmtTime, labelOf, statusPill, openModal/closeModal
-api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON)
+preview.js Demo-/Preview-Modus (Cloudflare-Worker ohne Backend): PREVIEW_MODE + In-Memory-API-Mock previewRequest() + Demo-Datensatz → kein Login (api.js/auth.js/ws.js prüfen PREVIEW_MODE)
+api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON; im Preview-Modus → previewRequest)
 auth.js    Login/Setup/Register-Modal + User-Header + Passwortwechsel
 map.js     Leaflet-Karte: initMap(), renderMap(); Wachführer: Türme als verschiebbare Marker (Drag→PATCH) + „Turm auf Karte setzen" (Klick→Modal) + Rechtsklick-Kontextmenü „Turm/Boot hier anlegen" (contextmenu→Modal mit vorbefüllter lat/lng); sonst farbcodierte circleMarker
 views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1- & Kontrollfahrt-Aktionen + Turm-/Boot-Verwaltung (Wachführer: anlegen/bearbeiten/löschen, Boot↔Turm-Zuordnung); Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
 ws.js      WebSocket-Client (/api/ws) → Refresh je Event + 30-s-Polling-Fallback
 init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung; Event-Listener
 ```
-**Ladereihenfolge:** state → utils → api → auth → map → views → ws → init.
+**Ladereihenfolge:** state → utils → **preview** → api → auth → map → views → ws → init.
 `public/admin.html` ist self-contained (eigenes Inline-JS, da Admin-Server-CSP keine externen Skripte erlaubt).
 
 ---
