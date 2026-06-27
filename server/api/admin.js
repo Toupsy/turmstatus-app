@@ -10,6 +10,7 @@ const { dbRun, dbGet, dbAll } = require('../db/connection');
 const { parsePositiveInt } = require('../db/ids');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
+const { passwordHashRounds } = require('../password');
 
 const ROLES = ['HAUPTWACHE', 'WACHFUEHRER', 'WACHGAENGER', 'BOOTSFUEHRER'];
 const BOAT_STATUS = ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
@@ -112,7 +113,7 @@ router.post('/users', express.json(), async (req, res) => {
     const userRole = ROLES.includes(role) ? role : 'WACHGAENGER';
     const admin = isAdmin === true || userRole === 'HAUPTWACHE' ? 1 : 0;
 
-    const hash = await bcryptjs.hash(password, 10);
+    const hash = await bcryptjs.hash(password, passwordHashRounds());
     const result = await dbRun(
       'INSERT INTO users (username, password_hash, full_name, role, tower_id, is_admin) VALUES (?, ?, ?, ?, ?, ?)',
       [username, hash, fullName || null, userRole, towerId ? parsePositiveInt(towerId) : null, admin]
@@ -185,7 +186,7 @@ router.post('/users/:id/reset-password', express.json(), async (req, res) => {
     const user = await dbGet('SELECT id FROM users WHERE id = ?', [id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const hash = await bcryptjs.hash(newPassword, 10);
+    const hash = await bcryptjs.hash(newPassword, passwordHashRounds());
     await dbRun('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [hash, id]);
     await recordAudit(req, 'admin_password_reset', 'user', id);
     res.json({ id, message: 'Password reset' });
