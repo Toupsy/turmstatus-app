@@ -27,7 +27,7 @@ const _PREVIEW_CONFIG = {
   boatStatus: { AT_TOWER: 'Am Turm', PATROL: 'Streife', DEPLOYED: 'Im Einsatz', OUT_OF_SERVICE: 'Außer Dienst' },
   towerStatus: { GREEN: 'Besetzt', YELLOW: 'Reduziert', RED: 'Kritisch' },
   reasons: { PAUSE: 'Pause', TOILET: 'Toilette', CATERING: 'Verpflegung', MATERIAL: 'Material', OTHER: 'Sonstiges' },
-  map: { center: [54.21449, 11.08967], zoom: 15 }
+  map: { center: [54.21449, 11.08967], zoom: 15, minZoom: 7, bounds: [[53.3, 7.2], [55.2, 11.4]] }
 };
 
 // Demo-Nutzer: Wachführer (volle operative Sicht ohne Admin-Rechte).
