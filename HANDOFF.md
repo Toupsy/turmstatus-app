@@ -31,6 +31,21 @@ auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammen
 - **Tests:** Vorlagen-Boot-CRUD admin-only (WF → 403), Positions-PATCH, neuer WF erbt
   Vorlagen-Boot inkl. Position ohne Turm. `npm test` → **29/29 grün**.
 
+## Zuletzt (Cloudflare-Worker-Preview ohne Login – Demo-Modus)
+- **Infrastruktur vom Wachplan-Generator übernommen:** `src/worker.js` (Assets + API-Proxy +
+  SPA-Fallback + `window.WORKER_ENVIRONMENT`), `wrangler.toml`, `.github/workflows/deploy-preview.yml`
+  (PR → `pr-<NR>.turmstatus-preview.workers.dev`, Bot-Kommentar), `npm run deploy[:dev]`,
+  Doku `docs/CLOUDFLARE_WORKER.md`. Secrets nötig: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+- **Unterschied zum Schwester-Projekt:** Turmstatus ist backend-getrieben → die Preview hat kein
+  Backend, sondern einen **In-Memory-Demo-Datensatz**. Neu: `public/js/preview.js` mit
+  `PREVIEW_MODE` (Worker-Flag **oder** `*.workers.dev`) + Mock `previewRequest()`.
+  `api.js`/`auth.js`/`ws.js` prüfen `PREVIEW_MODE`: kein `fetch`, Demo-Wachführer via
+  `/api/auth/me` (→ **kein Login**), WebSocket aus (Mutationen → `_handleEvent()` direkt).
+  Geladen in `Turmstatus.html` zwischen `utils.js` und `api.js`.
+- **Status:** voll interaktiv (Türme/Boote/-1/+1/Kontrollfahrt), flüchtig (Reload = Reset).
+  Alle vom Frontend genutzten Endpunkte sind gemockt (Admin-only-Routen nicht nötig, Demo-User =
+  Wachführer). `npm test` → **28/28 grün**. Smoke-Test des Mocks bestanden.
+
 ## Zuletzt (Rechtsklick-Platzierung auf der Karte: Turm/Boot + Boot-Position)
 - **Rechtsklick-Kontextmenü** auf der Einsatzkarte (nur Wachführer): „📍 Turm hier anlegen" /
   „⛵ Boot hier anlegen" öffnet das jeweilige Modal mit **vorbefüllter lat/lng** an der
