@@ -192,6 +192,37 @@ test('Kontrollfahrt: Bootsführer beantragt → nur WF1 genehmigt', async () => 
   assert.strictEqual(trips.find(t => t.id === ctId).status, 'APPROVED');
 });
 
+test('Manuelle Ist-Besetzung: Wachführer meldet anwesende WG ohne eigene Accounts', async () => {
+  await login(WF1.username, WF1.password);
+  // Turm mit Sollstärke 4, ganz ohne Wachgänger-Accounts
+  const tw = await api('POST', '/api/towers', { name: 'Turm Melde', requiredStaff: 4, presentStaff: 1 });
+  assert.strictEqual(tw.status, 201);
+  const id = tw.data.id;
+
+  const find = async () => (await api('GET', '/api/towers')).data.towers.find(t => t.id === id);
+  let t = await find();
+  assert.strictEqual(t.presentStaff, 1);
+  assert.strictEqual(t.currentStaff, 1);   // keine Guard-Objekte → nur gemeldete Anwesende
+  assert.strictEqual(t.status, 'RED');     // 1 von 4
+
+  // Anwesende hochmelden → Status zieht nach (kein Account nötig)
+  assert.strictEqual((await api('PATCH', `/api/towers/${id}`, { presentStaff: 2 })).status, 200);
+  t = await find();
+  assert.strictEqual(t.currentStaff, 2);
+  assert.strictEqual(t.status, 'YELLOW');  // 2 von 4 = 50 %
+
+  assert.strictEqual((await api('PATCH', `/api/towers/${id}`, { presentStaff: 4 })).status, 200);
+  t = await find();
+  assert.strictEqual(t.status, 'GREEN');
+
+  // Negative Werte werden auf 0 geklammert
+  assert.strictEqual((await api('PATCH', `/api/towers/${id}`, { presentStaff: -5 })).status, 200);
+  t = await find();
+  assert.strictEqual(t.presentStaff, 0);
+
+  await api('DELETE', `/api/towers/${id}`);
+});
+
 test('Admin sieht alle Mandanten (Türme aller Wachführer)', async () => {
   await login('hauptwache', 'wache2024test');
   const towers = (await api('GET', '/api/towers')).data.towers;

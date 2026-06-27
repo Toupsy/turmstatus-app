@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS towers (
   latitude REAL,
   longitude REAL,
   required_staff INTEGER NOT NULL DEFAULT 2,   -- Sollstärke (für abgeleitete Turmfarbe)
+  present_staff INTEGER NOT NULL DEFAULT 0,    -- Manuell gemeldete Ist-Besetzung (Wachführer zählt anwesende WG ohne eigene Accounts)
   owner_id INTEGER,                            -- Scope-Isolation: Wachführer, dem dieser Turm gehört
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE

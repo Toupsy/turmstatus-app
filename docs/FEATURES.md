@@ -2,6 +2,25 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Manuelle Ist-Besetzung: Wachführer meldet anwesende Wachgänger ohne Accounts
+
+Bisher leitete sich die Ist-Besetzung eines Turms (und damit die Turmfarbe) ausschließlich aus
+der Zahl der **Wachgänger-Objekte mit Status `IN_AREA`** ab – jeder anwesende WG brauchte also ein
+eigenes Guard-Objekt/Konto. Auf Wunsch kann der **Wachführer** die Zahl der aktuell anwesenden
+Wachgänger jetzt **direkt als Zahl melden**, ganz ohne pro WG ein Konto anzulegen.
+
+- **Neues Feld `towers.present_staff`** (manuelle Ist-Besetzung, Default 0; Schema + idempotente
+  Migration in `db/init.js`).
+- **Effektive Besetzung** (`status.js`-Eingabe): `currentStaff = guardStaff (IN_AREA-Objekte) +
+  present_staff`. Beide Wege sind kombinierbar; wer keine WG-Accounts nutzt, meldet einfach die
+  Zahl. Turmfarbe (`GREEN`/`YELLOW`/`RED`) zieht unverändert nach.
+- **API:** `POST`/`PATCH /api/towers` akzeptieren `presentStaff` (auf 0…99 geklammert, negative
+  Werte → 0); `GET /api/towers` liefert `presentStaff`, `guardStaff` und `currentStaff`.
+- **UI (nur Wachführer):** `+/-`-Stepper in der Türme-Tabelle und im Karten-Popup zum schnellen
+  Hoch-/Runtermelden; zusätzlich ein Feld „Aktuell anwesend (Wachgänger)" im Turm-Modal.
+- **Test:** `api.test.js` deckt das Hoch-/Runtermelden, die Farb-Schwellen ohne jedes WG-Konto und
+  die Klammerung negativer Werte ab.
+
 ## Rechtsklick auf der Karte: Turm/Boot direkt platzieren + Boot-Position
 
 Bisher war die Turm-Platzierung wenig intuitiv (Button „📍 Turm auf Karte setzen" → Linksklick).

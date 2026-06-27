@@ -6,7 +6,7 @@
 let appConfig = null;        // /api/config
 let currentUser = null;      // /api/auth/me → { userId, username, role, towerId, isAdmin }
 
-let towers = [];             // [{ id, name, callSign, latitude, longitude, requiredStaff, currentStaff, status }]
+let towers = [];             // [{ id, name, callSign, latitude, longitude, requiredStaff, presentStaff, guardStaff, currentStaff, status }]
 let guards = [];             // [{ id, name, towerId, towerName, status, latitude, longitude, userId }]
 let boats = [];              // [{ id, name, callSign, towerId, towerName, status, latitude, longitude }]
 let requests = [];           // [{ id, guardId, guardName, reason, note, status, ... }]

@@ -9,6 +9,20 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Manuelle Ist-Besetzung: WF meldet anwesende WG ohne Accounts)
+- **Problem/Wunsch:** Der Wachführer soll selbst sagen können, wie viele Wachgänger aktuell
+  anwesend sind – ohne dass für jeden WG ein Konto/Guard-Objekt angelegt werden muss.
+- **Lösung:** Neues Feld **`towers.present_staff`** (manuelle Ist-Besetzung). Die effektive
+  Besetzung = `guardStaff` (IN_AREA-Objekte) **+** `present_staff`. Turmfarbe (`status.js`)
+  unverändert, nur mit der neuen Summe als Eingang.
+- **Backend:** `api/towers.js` – `clampStaff()` (0…99, negative → 0); `POST`/`PATCH` nehmen
+  `presentStaff`; `GET` liefert `presentStaff`/`guardStaff`/`currentStaff`. Schema + idempotente
+  Migration (`db/schema.sql`, `db/init.js`).
+- **Frontend (nur WF):** `+/-`-Stepper in Türme-Tabelle (`views.js: adjustTowerPresent`) und
+  Karten-Popup (`map.js`); Feld „Aktuell anwesend" im Turm-Modal (`Turmstatus.html`, `views.js`).
+- **Test:** neuer `api.test.js`-Fall (Hoch-/Runtermelden, Farb-Schwellen ohne WG-Konto,
+  Negativ-Klammerung). `npm test` → **29/29 grün**.
+
 ## Zuletzt (Rechtsklick-Platzierung auf der Karte: Turm/Boot + Boot-Position)
 - **Rechtsklick-Kontextmenü** auf der Einsatzkarte (nur Wachführer): „📍 Turm hier anlegen" /
   „⛵ Boot hier anlegen" öffnet das jeweilige Modal mit **vorbefüllter lat/lng** an der

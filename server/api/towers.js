@@ -17,6 +17,14 @@ const { broadcast } = require('../realtime');
 const { deriveTowerStatus } = require('../status');
 
 const MAX_NAME_LEN = 120;
+const MAX_STAFF = 99;
+
+// Klammert eine gemeldete Personenzahl auf eine nicht-negative Ganzzahl im erlaubten Bereich.
+function clampStaff(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, MAX_STAFF);
+}
 
 // Validiert einen optionalen Koordinatenwert: null/undefined erlaubt, sonst Zahl im
 // gültigen Bereich. Gibt { ok, value } zurück (value ist null, wenn nicht gesetzt).
@@ -44,7 +52,11 @@ router.get('/', async (req, res) => {
     const byTower = Object.fromEntries(counts.map(c => [c.tower_id, c.n]));
     res.json({
       towers: towers.map(t => {
-        const current = byTower[t.id] || 0;
+        // Effektive Ist-Besetzung = gezählte IN_AREA-Wachgänger (mit Account/Objekt)
+        // PLUS manuell vom Wachführer gemeldete Anwesende (ohne eigene Accounts).
+        const guardStaff = byTower[t.id] || 0;
+        const presentStaff = t.present_staff || 0;
+        const current = guardStaff + presentStaff;
         return {
           id: t.id,
           name: t.name,
@@ -52,6 +64,8 @@ router.get('/', async (req, res) => {
           latitude: t.latitude,
           longitude: t.longitude,
           requiredStaff: t.required_staff,
+          presentStaff,
+          guardStaff,
           ownerId: t.owner_id,
           currentStaff: current,
           status: deriveTowerStatus(current, t.required_staff)
@@ -67,7 +81,7 @@ router.get('/', async (req, res) => {
 // POST /api/towers – Turm anlegen [WACHFUEHRER] (owner_id = anlegender Wachführer)
 router.post('/', requireWachfuehrer, express.json(), async (req, res) => {
   try {
-    const { name, callSign, latitude, longitude, requiredStaff } = req.body;
+    const { name, callSign, latitude, longitude, requiredStaff, presentStaff } = req.body;
     if (!name || typeof name !== 'string' || name.length > MAX_NAME_LEN) {
       return res.status(400).json({ error: 'Ungültiger oder fehlender Name' });
     }
@@ -75,8 +89,8 @@ router.post('/', requireWachfuehrer, express.json(), async (req, res) => {
     const lng = parseCoord(longitude, 'lng');
     if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
     const result = await dbRun(
-      'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff, owner_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, callSign || null, lat.value, lng.value, Number(requiredStaff) || 2, req.user.id]
+      'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff, present_staff, owner_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, callSign || null, lat.value, lng.value, Number(requiredStaff) || 2, clampStaff(presentStaff), req.user.id]
     );
     await recordAudit(req, 'tower_create', 'tower', result.lastID, { name });
     broadcast('towers-updated');
@@ -105,7 +119,7 @@ router.patch('/:id', requireWachfuehrer, express.json(), async (req, res) => {
     if (error === 404) return res.status(404).json({ error: 'Tower not found' });
     if (error === 403) return res.status(403).json({ error: 'Kein eigener Turm' });
 
-    const { name, callSign, latitude, longitude, requiredStaff } = req.body;
+    const { name, callSign, latitude, longitude, requiredStaff, presentStaff } = req.body;
     if (name !== undefined && (typeof name !== 'string' || !name || name.length > MAX_NAME_LEN)) {
       return res.status(400).json({ error: 'Ungültiger Name' });
     }
@@ -115,7 +129,7 @@ router.patch('/:id', requireWachfuehrer, express.json(), async (req, res) => {
 
     await dbRun(
       `UPDATE towers SET
-         name = ?, call_sign = ?, latitude = ?, longitude = ?, required_staff = ?
+         name = ?, call_sign = ?, latitude = ?, longitude = ?, required_staff = ?, present_staff = ?
        WHERE id = ?`,
       [
         name ?? tower.name,
@@ -123,6 +137,7 @@ router.patch('/:id', requireWachfuehrer, express.json(), async (req, res) => {
         latitude !== undefined ? lat.value : tower.latitude,
         longitude !== undefined ? lng.value : tower.longitude,
         requiredStaff !== undefined ? Number(requiredStaff) || tower.required_staff : tower.required_staff,
+        presentStaff !== undefined ? clampStaff(presentStaff) : tower.present_staff,
         id
       ]
     );

@@ -52,6 +52,9 @@
   .status-YELLOW,.status-BREAK,.status-PATROL{color:var(--warn);border-color:var(--warn)}
   .status-RED,.status-MINUS_ONE,.status-DEPLOYED,.status-OUT_OF_SERVICE{color:var(--coral);border-color:var(--coral)}
   .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .present-stepper{display:inline-flex;align-items:center;gap:6px;margin-left:8px;white-space:nowrap}
+  .present-stepper button{padding:1px 8px;line-height:1.4;min-width:26px}
+  .present-stepper span{min-width:14px;text-align:center;font-variant-numeric:tabular-nums}
   input,select,textarea{font:inherit;background:rgba(6,19,32,.6);border:1px solid var(--line-strong);color:var(--text);border-radius:8px;padding:8px 10px;width:100%}
   label{display:block;font-size:.8rem;color:var(--text-dim);margin:10px 0 4px}
   .modal{display:none;position:fixed;inset:0;background:rgba(3,10,18,.7);align-items:center;justify-content:center;z-index:1000;padding:16px}
@@ -353,6 +356,9 @@
     <input id="tower-modal-callsign">
     <label for="tower-modal-staff">Sollstärke</label>
     <input id="tower-modal-staff" type="number" min="1" max="20" value="2">
+    <label for="tower-modal-present">Aktuell anwesend (Wachgänger)</label>
+    <input id="tower-modal-present" type="number" min="0" max="99" value="0">
+    <p class="muted">Anzahl der gerade anwesenden Wachgänger – ohne dass für jeden ein eigenes Konto nötig ist.</p>
     <div class="grid2">
       <div>
         <label for="tower-modal-lat">Breite (lat)</label>
