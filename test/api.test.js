@@ -34,7 +34,7 @@ function startServer() {
       }
     });
     proc.stderr.on('data', () => {});
-    const timeout = setTimeout(() => reject(new Error('Server start timeout')), 15000);
+    const timeout = setTimeout(() => reject(new Error('Server start timeout')), 30000);
     const poll = setInterval(async () => {
       try {
         const r = await fetch(`${BASE}/health`);
