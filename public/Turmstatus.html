@@ -213,10 +213,20 @@
         <h2>Benutzerverwaltung <button id="btn-new-user" class="primary" style="float:right">+ Benutzer</button></h2>
         <div id="user-table"></div>
       </div>
+      <div class="panel" id="template-map-panel" style="display:none">
+        <h2>Demo-Konfiguration · Karte</h2>
+        <p class="muted" style="margin-bottom:12px">Vorlagen-Türme (📍) und -Boote (⛵) lassen sich hier per <b>Drag</b> verschieben. <b>Rechtsklick</b> auf die Karte legt einen Vorlagen-Turm/-Boot an der angeklickten Stelle an. Diese Positionen werden bei jedem <b>neu</b> angelegten Wachführer-Konto als Startkonfiguration übernommen.</p>
+        <div id="template-map" style="height:360px;border-radius:8px;overflow:hidden"></div>
+      </div>
       <div class="panel" id="tower-template-panel" style="display:none">
         <h2>Demo-Konfiguration · Türme <button id="btn-new-template" class="primary" style="float:right">+ Vorlagen-Turm</button></h2>
         <p class="muted" style="margin-bottom:12px">Diese Türme werden bei jedem <b>neu</b> angelegten Wachführer-Konto automatisch als Startkonfiguration übernommen.</p>
         <div id="template-table"></div>
+      </div>
+      <div class="panel" id="boat-template-panel" style="display:none">
+        <h2>Demo-Konfiguration · Boote <button id="btn-new-boat-template" class="primary" style="float:right">+ Vorlagen-Boot</button></h2>
+        <p class="muted" style="margin-bottom:12px">Diese Boote werden bei jedem <b>neu</b> angelegten Wachführer-Konto automatisch als Startkonfiguration übernommen (ohne Turm-Zuordnung).</p>
+        <div id="boat-template-table"></div>
       </div>
       <div class="panel">
         <h2>Audit-Protokoll</h2>
@@ -397,6 +407,35 @@
     <div class="modal-actions">
       <button id="template-modal-cancel">Abbrechen</button>
       <button class="primary" id="template-modal-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Vorlagen-Boot-Modal (Demo-Konfiguration, Admin) ── -->
+<div id="boat-template-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="boat-template-modal-title">Vorlagen-Boot anlegen</h3>
+    <input type="hidden" id="boat-template-modal-id">
+    <label for="boat-template-modal-name">Name</label>
+    <input id="boat-template-modal-name" maxlength="120">
+    <label for="boat-template-modal-callsign">Funkrufname (optional)</label>
+    <input id="boat-template-modal-callsign">
+    <label for="boat-template-modal-status">Status</label>
+    <select id="boat-template-modal-status"></select>
+    <div class="grid2">
+      <div>
+        <label for="boat-template-modal-lat">Breite (lat)</label>
+        <input id="boat-template-modal-lat" type="number" step="0.00001">
+      </div>
+      <div>
+        <label for="boat-template-modal-lng">Länge (lng)</label>
+        <input id="boat-template-modal-lng" type="number" step="0.00001">
+      </div>
+    </div>
+    <div class="err" id="boat-template-modal-error"></div>
+    <div class="modal-actions">
+      <button id="boat-template-modal-cancel">Abbrechen</button>
+      <button class="primary" id="boat-template-modal-save">Speichern</button>
     </div>
   </div>
 </div>

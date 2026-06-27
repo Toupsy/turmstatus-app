@@ -12,6 +12,7 @@ const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
 
 const ROLES = ['HAUPTWACHE', 'WACHFUEHRER', 'WACHGAENGER', 'BOOTSFUEHRER'];
+const BOAT_STATUS = ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
 const MIN_PASSWORD_LENGTH = 10;
 const MAX_NAME_LEN = 120;
 
@@ -33,6 +34,20 @@ async function applyTowerTemplates(ownerId) {
     await dbRun(
       'INSERT INTO towers (name, call_sign, latitude, longitude, required_staff, owner_id) VALUES (?, ?, ?, ?, ?, ?)',
       [t.name, t.call_sign, t.latitude, t.longitude, t.required_staff, ownerId]
+    );
+  }
+  return templates.length;
+}
+
+// Kopiert die Demo-Konfiguration (boat_templates) als Start-Boote in den Scope eines
+// neu angelegten Wachführers (boats.owner_id = ownerId). Türme werden NICHT zugeordnet
+// (tower_id = NULL) – der Wachführer ordnet seine geerbten Boote selbst eigenen Türmen zu.
+async function applyBoatTemplates(ownerId) {
+  const templates = await dbAll('SELECT * FROM boat_templates ORDER BY id');
+  for (const b of templates) {
+    await dbRun(
+      'INSERT INTO boats (name, call_sign, tower_id, status, latitude, longitude, owner_id) VALUES (?, ?, NULL, ?, ?, ?, ?)',
+      [b.name, b.call_sign, b.status || 'AT_TOWER', b.latitude, b.longitude, ownerId]
     );
   }
   return templates.length;
@@ -103,10 +118,12 @@ router.post('/users', express.json(), async (req, res) => {
       [username, hash, fullName || null, userRole, towerId ? parsePositiveInt(towerId) : null, admin]
     );
     await recordAudit(req, 'admin_user_create', 'user', result.lastID, { username, role: userRole });
-    // Neuer Wachführer erhält die Demo-Konfiguration (Vorlagen-Türme) als Startbestand.
+    // Neuer Wachführer erhält die Demo-Konfiguration (Vorlagen-Türme + -Boote) als Startbestand.
     if (userRole === 'WACHFUEHRER') {
-      const n = await applyTowerTemplates(result.lastID);
-      if (n > 0) broadcast('towers-updated');
+      const nTowers = await applyTowerTemplates(result.lastID);
+      if (nTowers > 0) broadcast('towers-updated');
+      const nBoats = await applyBoatTemplates(result.lastID);
+      if (nBoats > 0) broadcast('boats-updated');
     }
     res.status(201).json({ id: result.lastID, message: 'User created' });
   } catch (error) {
@@ -311,6 +328,102 @@ router.delete('/tower-templates/:id', async (req, res) => {
     res.json({ message: 'Template deleted' });
   } catch (error) {
     console.error('Delete tower template error:', error);
+    res.status(500).json({ error: 'Failed to delete template' });
+  }
+});
+
+// ── Demo-Konfiguration: Boote-Vorlage (boat_templates) ───────────────────────
+// Wird beim Anlegen jedes neuen Wachführer-Kontos als Start-Boote übernommen.
+
+// GET /api/admin/boat-templates
+router.get('/boat-templates', async (req, res) => {
+  try {
+    const rows = await dbAll('SELECT * FROM boat_templates ORDER BY name');
+    res.json({
+      templates: rows.map(b => ({
+        id: b.id, name: b.name, callSign: b.call_sign, status: b.status,
+        latitude: b.latitude, longitude: b.longitude
+      }))
+    });
+  } catch (error) {
+    console.error('List boat templates error:', error);
+    res.status(500).json({ error: 'Failed to list templates' });
+  }
+});
+
+// POST /api/admin/boat-templates
+router.post('/boat-templates', express.json(), async (req, res) => {
+  try {
+    const { name, callSign, status, latitude, longitude } = req.body;
+    if (!name || typeof name !== 'string' || name.length > MAX_NAME_LEN) {
+      return res.status(400).json({ error: 'Ungültiger oder fehlender Name' });
+    }
+    if (status && !BOAT_STATUS.includes(status)) return res.status(400).json({ error: 'Ungültiger Status' });
+    const lat = parseCoord(latitude, 'lat');
+    const lng = parseCoord(longitude, 'lng');
+    if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
+    const result = await dbRun(
+      'INSERT INTO boat_templates (name, call_sign, status, latitude, longitude) VALUES (?, ?, ?, ?, ?)',
+      [name, callSign || null, status || 'AT_TOWER', lat.value, lng.value]
+    );
+    await recordAudit(req, 'boat_template_create', 'boat_template', result.lastID, { name });
+    res.status(201).json({ id: result.lastID, message: 'Template created' });
+  } catch (error) {
+    console.error('Create boat template error:', error);
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+});
+
+// PATCH /api/admin/boat-templates/:id
+router.patch('/boat-templates/:id', express.json(), async (req, res) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ungültige Vorlagen-ID' });
+    const tpl = await dbGet('SELECT * FROM boat_templates WHERE id = ?', [id]);
+    if (!tpl) return res.status(404).json({ error: 'Template not found' });
+
+    const { name, callSign, status, latitude, longitude } = req.body;
+    if (name !== undefined && (typeof name !== 'string' || !name || name.length > MAX_NAME_LEN)) {
+      return res.status(400).json({ error: 'Ungültiger Name' });
+    }
+    if (status !== undefined && status && !BOAT_STATUS.includes(status)) {
+      return res.status(400).json({ error: 'Ungültiger Status' });
+    }
+    const lat = parseCoord(latitude, 'lat');
+    const lng = parseCoord(longitude, 'lng');
+    if (!lat.ok || !lng.ok) return res.status(400).json({ error: 'Ungültige Koordinaten' });
+
+    await dbRun(
+      'UPDATE boat_templates SET name = ?, call_sign = ?, status = ?, latitude = ?, longitude = ? WHERE id = ?',
+      [
+        name ?? tpl.name,
+        callSign ?? tpl.call_sign,
+        status ?? tpl.status,
+        latitude !== undefined ? lat.value : tpl.latitude,
+        longitude !== undefined ? lng.value : tpl.longitude,
+        id
+      ]
+    );
+    await recordAudit(req, 'boat_template_update', 'boat_template', id);
+    res.json({ id, message: 'Template updated' });
+  } catch (error) {
+    console.error('Update boat template error:', error);
+    res.status(500).json({ error: 'Failed to update template' });
+  }
+});
+
+// DELETE /api/admin/boat-templates/:id
+router.delete('/boat-templates/:id', async (req, res) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Ungültige Vorlagen-ID' });
+    const tpl = await dbGet('SELECT id FROM boat_templates WHERE id = ?', [id]);
+    if (!tpl) return res.status(404).json({ error: 'Template not found' });
+    await dbRun('DELETE FROM boat_templates WHERE id = ?', [id]);
+    await recordAudit(req, 'boat_template_delete', 'boat_template', id);
+    res.json({ message: 'Template deleted' });
+  } catch (error) {
+    console.error('Delete boat template error:', error);
     res.status(500).json({ error: 'Failed to delete template' });
   }
 });

@@ -227,6 +227,39 @@ test('Demo-Konfiguration: Vorlagen-Türme + Vererbung an neuen Wachführer', asy
   assert.ok(!(await api('GET', '/api/towers')).data.towers.some(t => t.name === 'Vorlage Hauptwache'));
 });
 
+test('Demo-Konfiguration: Vorlagen-Boote + Vererbung an neuen Wachführer', async () => {
+  // Admin legt ein Vorlagen-Boot mit Position an
+  await login('hauptwache', 'wache2024test');
+  const tpl = await api('POST', '/api/admin/boat-templates',
+    { name: 'Vorlage Boot 1', callSign: 'B-01', status: 'AT_TOWER', latitude: 54.2150, longitude: 11.0900 });
+  assert.strictEqual(tpl.status, 201);
+  const list = (await api('GET', '/api/admin/boat-templates')).data.templates;
+  assert.strictEqual(list.length, 1);
+  assert.strictEqual(list[0].latitude, 54.215);
+
+  // Position per PATCH verschieben (Karten-Drag)
+  assert.strictEqual((await api('PATCH', `/api/admin/boat-templates/${tpl.data.id}`,
+    { latitude: 54.22, longitude: 11.1 })).status, 200);
+
+  // Wachführer hat KEINEN Zugriff auf die Vorlagen-Verwaltung (Admin-Gate)
+  await login(WF1.username, WF1.password);
+  assert.strictEqual((await api('GET', '/api/admin/boat-templates')).status, 403);
+  assert.strictEqual((await api('POST', '/api/admin/boat-templates', { name: 'X' })).status, 403);
+
+  // Admin legt einen NEUEN Wachführer an → erbt das Vorlagen-Boot in seinen Scope
+  await login('hauptwache', 'wache2024test');
+  assert.strictEqual((await api('POST', '/api/admin/users',
+    { username: 'wf4', password: 'wachfuehrer-444', role: 'WACHFUEHRER' })).status, 201);
+
+  await login('wf4', 'wachfuehrer-444');
+  const wf4Boats = (await api('GET', '/api/boats')).data.boats;
+  assert.strictEqual(wf4Boats.length, 1);
+  assert.strictEqual(wf4Boats[0].name, 'Vorlage Boot 1');
+  assert.strictEqual(wf4Boats[0].latitude, 54.22);
+  assert.strictEqual(wf4Boats[0].towerId, null, 'geerbtes Boot startet ohne Turm-Zuordnung');
+  assert.ok(wf4Boats[0].ownerId, 'geerbtes Boot hat einen owner (eigener Scope)');
+});
+
 test('Dashboard-Summary liefert Kennzahlen', async () => {
   await login('hauptwache', 'wache2024test');
   const { status, data } = await api('GET', '/api/dashboard/summary');

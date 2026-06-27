@@ -2,6 +2,28 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Admin positioniert Türme + Boote in der Standard-Config (Vorlagen-Boote + Demo-Karte)
+
+Bisher konnte der App-Admin nur **Vorlagen-Türme** (`tower_templates`) als Standard-Config pflegen,
+und Positionen nur über Zahlenfelder. Neu kann er auch **Boote** vorkonfigurieren und beide
+**direkt auf einer Karte positionieren** – diese Positionen erbt jeder **neue** Wachführer.
+- **Vorlagen-Boote (`boat_templates`):** neue Admin-gepflegte Tabelle (name, call_sign, status,
+  latitude, longitude). API `GET/POST/PATCH/DELETE /api/admin/boat-templates` (admin-gated;
+  Wachführer → 403; Status- und Koordinaten-Validierung wie bei den Turm-Vorlagen).
+- **Vererbung beim Anlegen:** `POST /api/admin/users` mit role=WACHFUEHRER klont die Vorlagen-Boote
+  via `applyBoatTemplates()` in den Scope des neuen Wachführers (`boats.owner_id`) – **ohne**
+  Turm-Zuordnung (`tower_id = NULL`), die der Wachführer später selbst vornimmt. Läuft neben der
+  bestehenden Turm-Vererbung; bestehende Wachführer bleiben unverändert.
+- **Demo-Konfigurations-Karte:** im Verwaltung-Tab eine eigene Leaflet-Karte (`#template-map`).
+  Vorlagen-Türme (📍) und -Boote (⛵) sind **verschiebbare Marker** – ein **Drag** speichert die
+  neue Position per PATCH (`moveTowerTemplate`/`moveBoatTemplate`). Ein **Rechtsklick** auf die
+  Karte legt einen Vorlagen-Turm/-Boot an der angeklickten Stelle an (Modal mit vorbefüllter
+  lat/lng). Das Kontextmenü ist nun generisch (`openMapContextMenu()`) und wird von Einsatz- und
+  Demo-Karte geteilt (`map.js`: `initTemplateMap`/`renderTemplateMap`).
+- **UI:** Panels „Demo-Konfiguration · Karte/Boote" + Vorlagen-Boot-Modal; Tabellen mit
+  Bearbeiten/Löschen wie bei den Turm-Vorlagen (`views.js`, `Turmstatus.html`, `init.js`,
+  `state.js:boatTemplates`).
+
 ## Rechtsklick auf der Karte: Turm/Boot direkt platzieren + Boot-Position
 
 Bisher war die Turm-Platzierung wenig intuitiv (Button „📍 Turm auf Karte setzen" → Linksklick).
