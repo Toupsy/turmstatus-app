@@ -18,6 +18,7 @@ let activeTab = 'map';       // aktueller Tab
 // Leaflet-Map-Objekte (in map.js gesetzt)
 let _map = null;
 let _markerLayer = null;
+let _addTowerMode = false;   // true: nächster Karten-Klick legt einen Turm an (Wachführer)
 
 // Rollen-Helfer
 const isHauptwache = () => currentUser && currentUser.role === 'HAUPTWACHE';

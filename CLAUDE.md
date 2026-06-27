@@ -56,9 +56,9 @@ db/session.js      createSessionMiddleware (SQLite-Store, DRY für beide Server)
 db/ids.js          parsePositiveInt (strikte ID-Validierung, kein '5abc'→5)
 db/audit.js        recordAudit(req, action, ...) → audit_log
 api/auth.js        login/logout/me/init/needs-setup/registration/register/password + Brute-Force-Schutz
-api/towers.js      Türme: Liste mit abgeleitetem Status, CRUD [HAUPTWACHE | WACHFUEHRER(eigener)]
+api/towers.js      Türme (Stations-Infrastruktur): Liste mit abgeleitetem Status, CRUD + Kartenposition [WACHFUEHRER stationsweit; HAUPTWACHE-Fallback]
 api/guards.js      Wachgänger: Liste, CRUD, Status/Position
-api/boats.js       Boote: Liste, CRUD, Status/Position
+api/boats.js       Boote: Liste, CRUD, Status/Position, Turm-Zuordnung [WACHFUEHRER stationsweit; HAUPTWACHE-Fallback]
 api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr
 api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → WACHFUEHRER(eigene Wache) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
 api/dashboard.js   GET /summary – Lage-Kennzahlen
@@ -69,12 +69,12 @@ api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTS
 
 **Frontend `public/js/`** — Ladereihenfolge in `Turmstatus.html` beachten:
 ```
-state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
+state.js   Globaler Zustand (appConfig, currentUser, towers, guards, boats, requests, controlTrips, users, _map, _addTowerMode); Rollen-Helfer isHauptwache/isWachfuehrer/isBootsfuehrer/canManage(App-Admin)/canManageTeam(Wachführer)
 utils.js   escapeHtml, showToast, fmtTime, labelOf, statusPill, openModal/closeModal
 api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON)
 auth.js    Login/Setup/Register-Modal + User-Header + Passwortwechsel
-map.js     Leaflet-Karte: initMap(), renderMap() (Türme farbcodiert, Wachgänger/Boote als Marker)
-views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1-Aktionen + Kontrollfahrt-Aktionen; Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
+map.js     Leaflet-Karte: initMap(), renderMap(); Wachführer: Türme als verschiebbare Marker (Drag→PATCH) + „Turm auf Karte setzen" (Klick→Modal); sonst farbcodierte circleMarker
+views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1- & Kontrollfahrt-Aktionen + Turm-/Boot-Verwaltung (Wachführer: anlegen/bearbeiten/löschen, Boot↔Turm-Zuordnung); Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
 ws.js      WebSocket-Client (/api/ws) → Refresh je Event + 30-s-Polling-Fallback
 init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung; Event-Listener
 ```
@@ -103,8 +103,11 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 - **App-Admin** (`is_admin`, Rolle HAUPTWACHE): Account-Verwaltung (legt Wachführer an) + **reine Ansicht**.
   Hat **KEINE** operativen Bestätigungsrechte – -1- und Kontrollfahrt-Genehmigung sind ihm verwehrt
   (eigene Gates in `requests.js`/`control-trips.js`, NICHT über `requireRole` mit HAUPTWACHE-Bypass).
-- **Wachführer**: sieht alles; **genehmigt/lehnt ab** (-1 + Kontrollfahrten) **nur für die eigene Wache**
-  (Turm-Match); verwaltet eigenes Personal (Turm).
+- **Wachführer**: sieht alles; verwaltet die **Stations-Infrastruktur** – legt **Türme** an,
+  **positioniert** sie auf der Karte (Klick/Drag) und löscht sie, legt **Boote** an und ordnet
+  sie Türmen zu (stationsweit, nicht an einen Turm gebunden); **genehmigt/lehnt ab** (-1 +
+  Kontrollfahrten) aktuell weiterhin **nur für die eigene Wache** (Turm-Match); verwaltet eigenes
+  Personal (Turm-gescoped). *(Offen: vollständiges Ein-Standort-Modell – s. HANDOFF.md.)*
 - **Wachgänger**: sieht alles; darf nur **-1 beantragen**.
 - **Bootsführer**: wie Wachgänger + darf **Kontrollfahrten beantragen**.
 

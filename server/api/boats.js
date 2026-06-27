@@ -41,8 +41,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/boats [HAUPTWACHE]
-router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => {
+// POST /api/boats [WACHFUEHRER | HAUPTWACHE-Fallback]
+router.post('/', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
   try {
     const { name, callSign, towerId, status, latitude, longitude } = req.body;
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'Name erforderlich' });
@@ -61,7 +61,7 @@ router.post('/', requireRole('HAUPTWACHE'), express.json(), async (req, res) => 
   }
 });
 
-// PATCH /api/boats/:id – Status/Position/Stammdaten [HAUPTWACHE | WACHFUEHRER]
+// PATCH /api/boats/:id – Status/Position/Stammdaten/Turm-Zuordnung [WACHFUEHRER | HAUPTWACHE-Fallback]
 router.patch('/:id', requireRole('WACHFUEHRER'), express.json(), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
@@ -95,8 +95,8 @@ router.patch('/:id', requireRole('WACHFUEHRER'), express.json(), async (req, res
   }
 });
 
-// DELETE /api/boats/:id [HAUPTWACHE]
-router.delete('/:id', requireRole('HAUPTWACHE'), async (req, res) => {
+// DELETE /api/boats/:id [WACHFUEHRER | HAUPTWACHE-Fallback]
+router.delete('/:id', requireRole('WACHFUEHRER'), async (req, res) => {
   try {
     const id = parsePositiveInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'Ungültige Boot-ID' });

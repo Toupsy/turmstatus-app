@@ -165,6 +165,37 @@ test('Kontrollfahrt: Bootsführer beantragt → Wachführer genehmigt; Admin dar
   assert.strictEqual(trips.find(t => t.id === ctId).status, 'APPROVED');
 });
 
+test('Wachführer verwaltet Türme + Boote; Wachgänger darf NICHT', async () => {
+  // Wachführer legt einen Turm an, positioniert ihn und ordnet ein Boot zu.
+  await api('POST', '/api/auth/login', { username: 'wf_test', password: 'wachfuehrer-123' });
+  const tw = await api('POST', '/api/towers',
+    { name: 'Turm Test', callSign: '06/99', latitude: 54.215, longitude: 11.090, requiredStaff: 2 });
+  assert.strictEqual(tw.status, 201);
+  const towerId = tw.data.id;
+
+  // Positionieren (Karten-Drag → PATCH lat/lng)
+  assert.strictEqual((await api('PATCH', `/api/towers/${towerId}`, { latitude: 54.216, longitude: 11.091 })).status, 200);
+  // Ungültige Koordinaten → 400
+  assert.strictEqual((await api('PATCH', `/api/towers/${towerId}`, { latitude: 999 })).status, 400);
+
+  // Boot anlegen + Turm-Zuordnung ändern
+  const bt = await api('POST', '/api/boats', { name: 'Boot Test', towerId });
+  assert.strictEqual(bt.status, 201);
+  const boatId = bt.data.id;
+  assert.strictEqual((await api('PATCH', `/api/boats/${boatId}`, { towerId: null })).status, 200);
+
+  // Wachgänger hat KEINE Infrastruktur-Rechte
+  await api('POST', '/api/auth/login', { username: 'wg_test', password: 'wachgaenger-123' });
+  assert.strictEqual((await api('POST', '/api/towers', { name: 'X' })).status, 403);
+  assert.strictEqual((await api('POST', '/api/boats', { name: 'X' })).status, 403);
+  assert.strictEqual((await api('DELETE', `/api/towers/${towerId}`)).status, 403);
+
+  // Aufräumen als Wachführer (löscht Boot + Turm)
+  await api('POST', '/api/auth/login', { username: 'wf_test', password: 'wachfuehrer-123' });
+  assert.strictEqual((await api('DELETE', `/api/boats/${boatId}`)).status, 200);
+  assert.strictEqual((await api('DELETE', `/api/towers/${towerId}`)).status, 200);
+});
+
 test('Dashboard-Summary liefert Kennzahlen', async () => {
   await api('POST', '/api/auth/login', { username: 'hauptwache', password: 'wache2024test' });
   const { status, data } = await api('GET', '/api/dashboard/summary');

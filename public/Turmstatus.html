@@ -150,6 +150,12 @@
     <section id="tab-map" class="tab active">
       <div class="panel">
         <h2>Einsatzkarte</h2>
+        <!-- Karten-Werkzeuge für den Wachführer (Türme/Boote verwalten). Admin: ausgeblendet. -->
+        <div id="map-tools" class="hidden" style="margin-bottom:10px;gap:8px;flex-wrap:wrap;align-items:center;display:flex">
+          <button id="btn-add-tower" class="primary">📍 Turm auf Karte setzen</button>
+          <button id="btn-add-boat">⛵ Boot anlegen</button>
+          <span class="muted" id="map-tools-hint">Tipp: Turm-Marker lassen sich per Drag verschieben.</span>
+        </div>
         <div id="map"></div>
         <div class="legend">
           <span><span class="dot green"></span>Turm besetzt</span>
@@ -167,7 +173,7 @@
         <div class="cards" id="summary-cards"></div>
       </div>
       <div class="panel">
-        <h2>Türme</h2>
+        <h2>Türme <button id="btn-new-tower" class="primary" style="float:right;display:none">+ Turm</button></h2>
         <div id="tower-table"></div>
       </div>
       <div class="panel">
@@ -175,7 +181,7 @@
         <div id="guard-table"></div>
       </div>
       <div class="panel">
-        <h2>Boote</h2>
+        <h2>Boote <button id="btn-new-boat" class="primary" style="float:right;display:none">+ Boot</button></h2>
         <div id="boat-table"></div>
       </div>
     </section>
@@ -322,6 +328,57 @@
     <div class="modal-actions">
       <button id="user-modal-cancel">Abbrechen</button>
       <button class="primary" id="user-modal-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Turm-Modal (Wachführer) ── -->
+<div id="tower-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="tower-modal-title">Turm anlegen</h3>
+    <input type="hidden" id="tower-modal-id">
+    <label for="tower-modal-name">Name</label>
+    <input id="tower-modal-name" maxlength="120">
+    <label for="tower-modal-callsign">Funkrufname (optional)</label>
+    <input id="tower-modal-callsign">
+    <label for="tower-modal-staff">Sollstärke</label>
+    <input id="tower-modal-staff" type="number" min="1" max="20" value="2">
+    <div class="grid2">
+      <div>
+        <label for="tower-modal-lat">Breite (lat)</label>
+        <input id="tower-modal-lat" type="number" step="0.00001">
+      </div>
+      <div>
+        <label for="tower-modal-lng">Länge (lng)</label>
+        <input id="tower-modal-lng" type="number" step="0.00001">
+      </div>
+    </div>
+    <p class="muted" id="tower-modal-pos-hint" style="display:none">Position aus Karten-Klick übernommen – per Drag des Markers später feinjustierbar.</p>
+    <div class="err" id="tower-modal-error"></div>
+    <div class="modal-actions">
+      <button id="tower-modal-cancel">Abbrechen</button>
+      <button class="primary" id="tower-modal-save">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Boot-Modal (Wachführer) ── -->
+<div id="boat-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="boat-modal-title">Boot anlegen</h3>
+    <input type="hidden" id="boat-modal-id">
+    <label for="boat-modal-name">Name</label>
+    <input id="boat-modal-name" maxlength="120">
+    <label for="boat-modal-callsign">Funkrufname (optional)</label>
+    <input id="boat-modal-callsign">
+    <label for="boat-modal-tower">Turm-Zuordnung</label>
+    <select id="boat-modal-tower"></select>
+    <label for="boat-modal-status">Status</label>
+    <select id="boat-modal-status"></select>
+    <div class="err" id="boat-modal-error"></div>
+    <div class="modal-actions">
+      <button id="boat-modal-cancel">Abbrechen</button>
+      <button class="primary" id="boat-modal-save">Speichern</button>
     </div>
   </div>
 </div>

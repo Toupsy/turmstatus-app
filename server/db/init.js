@@ -28,16 +28,19 @@ const TRANSIENT_INTEGRITY_CODES = new Set(['SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLI
 const INIT_LOCK_TIMEOUT_MS = Number.parseInt(process.env.DB_INIT_LOCK_TIMEOUT_MS || '60000', 10);
 const INIT_LOCK_STALE_MS = Number.parseInt(process.env.DB_INIT_LOCK_STALE_MS || '120000', 10);
 
-// ── Demo-Seed: Türme + Boote an Ostsee-Koordinaten (nur wenn towers leer) ──
+// ── Demo-Seed: Türme + Boote an der DLRG-Wache Dahme/Ostsee (nur wenn towers leer) ──
+// Koordinaten an der Strandpromenade Dahme (Holstein); die Hauptwache liegt am
+// zentralen Strandzugang, weitere Türme verteilen sich nordwärts/südwärts entlang
+// der Promenade. Der Wachführer kann sie in der App frei verschieben/ergänzen.
 const SEED_TOWERS = [
-  { name: 'Turm 1', call_sign: '9/12', latitude: 54.0145, longitude: 13.7680, required_staff: 2 },
-  { name: 'Turm 2', call_sign: '9/14', latitude: 54.0182, longitude: 13.7725, required_staff: 2 },
-  { name: 'Turm 3', call_sign: '9/16', latitude: 54.0221, longitude: 13.7771, required_staff: 2 },
-  { name: 'Turm 4', call_sign: '9/18', latitude: 54.0260, longitude: 13.7818, required_staff: 2 }
+  { name: 'Hauptwache Dahme', call_sign: '06/01', latitude: 54.21449, longitude: 11.08967, required_staff: 3 },
+  { name: 'Turm Nord', call_sign: '06/02', latitude: 54.21880, longitude: 11.09060, required_staff: 2 },
+  { name: 'Turm Seebrücke', call_sign: '06/03', latitude: 54.21270, longitude: 11.08870, required_staff: 2 },
+  { name: 'Turm Süd', call_sign: '06/04', latitude: 54.20950, longitude: 11.08740, required_staff: 2 }
 ];
 const SEED_BOATS = [
-  { name: 'Boot 78/1', call_sign: '78/1', towerIdx: 0, status: 'AT_TOWER', latitude: 54.0140, longitude: 13.7700 },
-  { name: 'Boot 78/2', call_sign: '78/2', towerIdx: 2, status: 'PATROL', latitude: 54.0210, longitude: 13.7790 }
+  { name: 'Motorrettungsboot Dahme', call_sign: '06/Boot 1', towerIdx: 0, status: 'AT_TOWER', latitude: 54.21470, longitude: 11.09120 },
+  { name: 'Rettungsboard-Streife', call_sign: '06/Boot 2', towerIdx: 0, status: 'PATROL', latitude: 54.21680, longitude: 11.09300 }
 ];
 
 // Validate environment variables

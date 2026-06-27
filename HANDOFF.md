@@ -9,6 +9,37 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (DLRG-Wache-Architektur: Wachführer verwaltet Türme/Boote + Karte auf Dahme)
+- **Geo:** Kartenzentrum + Demo-Seed auf die **DLRG Hauptwache Dahme** (Strandpromenade,
+  `54.21449, 11.08967`, Zoom 15) umgestellt – `server/config.json`, `public/js/map.js`
+  (Fallback) und `server/db/init.js` (Seed-Türme „Hauptwache Dahme / Turm Nord / Seebrücke /
+  Süd" + zwei Boote entlang der Promenade).
+- **Wachführer verwaltet jetzt Türme & Boote (Stations-Infrastruktur):**
+  - Backend: `towers.js` (POST/PATCH/DELETE) und `boats.js` (POST/DELETE) von `HAUPTWACHE`
+    auf `requireRole('WACHFUEHRER')` geöffnet (HAUPTWACHE bleibt per Bypass technischer
+    Fallback fürs Erst-Setup, agiert in der UI aber rein ansehend). Türme sind **nicht** an
+    einen einzelnen Wachführer gebunden – **jeder** Wachführer darf **jeden** Turm pflegen
+    (PATCH-Eigentums-Check entfernt). Neue Koordinaten-Validierung (`parseCoord`, lat/lng-Range).
+  - Frontend: **DIVERA-artige Karten-Bedienung** – „📍 Turm auf Karte setzen" (Klick platziert
+    Turm, öffnet Modal mit vorbefüllter Position) + **verschiebbare** Turm-Marker (Drag → PATCH
+    Position) für den Wachführer (`map.js`: `_towerIcon`, `setAddTowerMode`, draggable L.marker
+    statt circleMarker). Neue Turm-/Boot-Modals + Tabellen-Aktionen (Anlegen/Bearbeiten/Löschen),
+    **Boot↔Turm-Zuordnung** per Inline-Select (`views.js`, `Turmstatus.html`, `init.js`,
+    `state.js:_addTowerMode`). Management-UI nur für Wachführer; Admin sieht nur an.
+- **Rollen-Anlage:** unverändert korrekt – Admin legt **Wachführer** an; Wachführer legt nur
+  **Wachgänger + Bootsführer** an (kein „Turmführer"). Passt zur Anforderung.
+- **Tests:** neuer Integrationstest „Wachführer verwaltet Türme + Boote; Wachgänger darf NICHT"
+  (Anlegen/Positionieren/Zuordnen/Löschen + 403 für Wachgänger + 400 bei Bad-Coords). `npm test` → **26/26 grün**.
+- **BEWUSSTE ARCHITEKTUR-ENTSCHEIDUNG (bitte prüfen):** Diese Iteration macht **nur die
+  Infrastruktur** (Türme/Boote) stationsweit durch den Wachführer verwaltbar. **Unverändert
+  gelassen** wurden – weil nicht explizit gefordert und test-/gate-kritisch:
+  (a) **-1-/Kontrollfahrt-Genehmigung** bleibt auf die **eigene Wache** (Turm-Match) gescoped;
+  (b) **Personal-Anlage** (`team.js`) bleibt auf `tower_id` des Wachführers gescoped;
+  (c) `users.tower_id` bleibt für Genehmigung/Team maßgeblich.
+  → **Offene Frage:** Soll die Wache **vollständig „Ein-Standort"** werden (jeder Wachführer
+  genehmigt alles, Personal stationsweit)? Dann müssten `requests.js`/`control-trips.js`/`team.js`
+  + `api.test.js`-403-Erwartungen angepasst werden. Bewusst noch nicht getan.
+
 ## Zuletzt (Cloudflare-/Proxy-IP-Helper vom Wachplan-Generator übernommen)
 - Neuer gemeinsamer `server/http-common.js` mit `trustProxyValue()`, `overrideClientIp()`,
   `clientIpFromHeaders()`, Security-Headern und gemeinsamen 404/Error/SIGTERM-Handlern.
