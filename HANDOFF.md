@@ -9,6 +9,20 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Rechtsklick-Platzierung auf der Karte: Turm/Boot + Boot-Position)
+- **Rechtsklick-Kontextmenü** auf der Einsatzkarte (nur Wachführer): „📍 Turm hier anlegen" /
+  „⛵ Boot hier anlegen" öffnet das jeweilige Modal mit **vorbefüllter lat/lng** an der
+  angeklickten Stelle (`public/js/map.js`: `showMapContextMenu`/`hideMapContextMenu`,
+  `_map.on('contextmenu')`). Linksklick/Move/Zoom schließt es; Position wird an den Viewport
+  geklemmt. CSS `.map-context-menu` in `Turmstatus.html`.
+- **Boot-Position aus dem UI:** Boot-Modal hat neue lat/lng-Felder + Positions-Hinweis;
+  `openBoatModal(boat, lat, lng)` + `saveBoat` reichen Koordinaten durch (API akzeptierte sie
+  bereits). ⛵-Marker erscheinen damit an der gewählten Stelle.
+- **Hinweis:** Boots-Anlegen existierte schon (Buttons `btn-add-boat`/`btn-new-boat`,
+  `openBoatModal`/`saveBoat`) – diese Iteration ergänzt v. a. die intuitive Karten-Platzierung
+  per Rechtsklick (vom Nutzer erfragt) und gibt Booten eine Position.
+- Button-Workflow + Drag-to-move der Turm-Marker bleiben unverändert. `npm test` → **28/28 grün**.
+
 ## Zuletzt (Demo-Konfiguration: Vorlagen-Türme für neue Wachführer)
 - Neue Tabelle **`tower_templates`** (`db/schema.sql`, via `CREATE TABLE IF NOT EXISTS` auch auf
   Bestands-DBs). Der **App-Admin** pflegt darüber eine **Demo-Konfiguration** von Türmen.

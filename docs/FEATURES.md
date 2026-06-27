@@ -2,6 +2,23 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Rechtsklick auf der Karte: Turm/Boot direkt platzieren + Boot-Position
+
+Bisher war die Turm-Platzierung wenig intuitiv (Button „📍 Turm auf Karte setzen" → Linksklick).
+Neu gibt es für den **Wachführer** ein **Rechtsklick-Kontextmenü** direkt auf der Karte:
+- **Rechtsklick (contextmenu)** auf eine beliebige Stelle öffnet ein kleines Menü mit den
+  angeklickten Koordinaten und zwei Aktionen: **„📍 Turm hier anlegen"** und **„⛵ Boot hier
+  anlegen"** – das jeweilige Modal öffnet sich mit **vorbefüllter lat/lng**. Nur für den
+  Wachführer; Linksklick/Scroll/Zoom schließt das Menü, es wird an den Viewport geklemmt
+  (`map.js`: `showMapContextMenu`/`hideMapContextMenu`).
+- **Boote bekommen jetzt eine Kartenposition:** Das Boot-Modal hat neue lat/lng-Felder
+  (`boat-modal-lat`/`-lng` + Positions-Hinweis); `openBoatModal(boat, lat, lng)` und `saveBoat`
+  reichen die Koordinaten durch. Die Boote-API (`POST`/`PATCH /api/boats`) akzeptierte
+  `latitude`/`longitude` bereits – jetzt sind sie auch aus dem UI setzbar. Boot-Marker (⛵)
+  erscheinen damit an der gewählten Stelle.
+- Der bestehende Button-Workflow („Turm auf Karte setzen", Drag-to-move der Turm-Marker) bleibt
+  unverändert erhalten; der Tipp-Text nennt jetzt zusätzlich den Rechtsklick.
+
 ## Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
 
 Damit ein neu angelegter Wachführer nicht bei null startet, kann der App-Admin eine

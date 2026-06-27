@@ -253,8 +253,10 @@ async function setBoatTower(id, towerVal) {
 }
 
 // ── Boot-Verwaltung (Wachführer) ─────────────────────────────
-function openBoatModal(boat) {
+// openBoatModal(null) = neu (optional mit lat/lng aus Karten-Rechtsklick); mit Objekt = bearbeiten.
+function openBoatModal(boat, lat, lng) {
   document.getElementById('boat-modal-error').textContent = '';
+  const posHint = document.getElementById('boat-modal-pos-hint');
   // Turm-Auswahl füllen
   const towerSel = document.getElementById('boat-modal-tower');
   towerSel.innerHTML = '<option value="">– kein Turm –</option>' +
@@ -271,6 +273,9 @@ function openBoatModal(boat) {
     document.getElementById('boat-modal-callsign').value = boat.callSign || '';
     towerSel.value = boat.towerId ? String(boat.towerId) : '';
     statusSel.value = boat.status || 'AT_TOWER';
+    document.getElementById('boat-modal-lat').value = boat.latitude != null ? boat.latitude : '';
+    document.getElementById('boat-modal-lng').value = boat.longitude != null ? boat.longitude : '';
+    if (posHint) posHint.style.display = 'none';
   } else {
     document.getElementById('boat-modal-title').textContent = 'Boot anlegen';
     document.getElementById('boat-modal-id').value = '';
@@ -278,6 +283,9 @@ function openBoatModal(boat) {
     document.getElementById('boat-modal-callsign').value = '';
     towerSel.value = '';
     statusSel.value = 'AT_TOWER';
+    document.getElementById('boat-modal-lat').value = lat != null ? lat.toFixed(5) : '';
+    document.getElementById('boat-modal-lng').value = lng != null ? lng.toFixed(5) : '';
+    if (posHint) posHint.style.display = (lat != null) ? 'block' : 'none';
   }
   openModal('boat-modal');
 }
@@ -293,11 +301,15 @@ async function saveBoat() {
   const name = document.getElementById('boat-modal-name').value.trim();
   if (!name) { errEl.textContent = 'Bitte einen Namen angeben.'; return; }
   const towerVal = document.getElementById('boat-modal-tower').value;
+  const latRaw = document.getElementById('boat-modal-lat').value;
+  const lngRaw = document.getElementById('boat-modal-lng').value;
   const payload = {
     name,
     callSign: document.getElementById('boat-modal-callsign').value.trim() || null,
     towerId: towerVal ? Number(towerVal) : null,
-    status: document.getElementById('boat-modal-status').value
+    status: document.getElementById('boat-modal-status').value,
+    latitude: latRaw === '' ? null : Number(latRaw),
+    longitude: lngRaw === '' ? null : Number(lngRaw)
   };
   try {
     if (id) await apiPatch('/api/boats/' + id, payload);
