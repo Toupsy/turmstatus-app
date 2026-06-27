@@ -22,6 +22,60 @@ function initMap() {
     setAddTowerMode(false);
     openTowerModal(null, e.latlng.lat, e.latlng.lng);
   });
+
+  // Rechtsklick (Wachführer): Kontextmenü „Turm/Boot hier anlegen" an der Klickposition.
+  _map.on('contextmenu', (e) => {
+    if (typeof isWachfuehrer === 'function' && isWachfuehrer()) {
+      showMapContextMenu(e);
+    }
+  });
+}
+
+// ── Rechtsklick-Kontextmenü (Wachführer) ─────────────────────
+// Legt Turm bzw. Boot direkt an der angeklickten Geo-Position an (öffnet das
+// jeweilige Modal mit vorbefüllter lat/lng). Nur sichtbar für den Wachführer.
+function _ensureMapContextMenu() {
+  let menu = document.getElementById('map-context-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'map-context-menu';
+    menu.className = 'map-context-menu';
+    document.body.appendChild(menu);
+    // Jeder Links-Klick / Scroll schließt das Menü wieder.
+    document.addEventListener('click', hideMapContextMenu);
+    if (_map) _map.on('movestart zoomstart', hideMapContextMenu);
+  }
+  return menu;
+}
+
+function hideMapContextMenu() {
+  const menu = document.getElementById('map-context-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+function showMapContextMenu(e) {
+  const menu = _ensureMapContextMenu();
+  const lat = e.latlng.lat, lng = e.latlng.lng;
+  const items = [
+    { label: '📍 Turm hier anlegen', fn: () => openTowerModal(null, lat, lng) },
+    { label: '⛵ Boot hier anlegen', fn: () => openBoatModal(null, lat, lng) }
+  ];
+  menu.innerHTML = `<div class="ctx-coord">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>`;
+  items.forEach(it => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = it.label;
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); hideMapContextMenu(); it.fn(); });
+    menu.appendChild(btn);
+  });
+  // Am Mauszeiger positionieren (Seitenkoordinaten); ggf. an den Viewport klemmen.
+  const oe = e.originalEvent;
+  menu.style.display = 'block';
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  const x = Math.min(oe.pageX, window.scrollX + document.documentElement.clientWidth - mw - 6);
+  const y = Math.min(oe.pageY, window.scrollY + document.documentElement.clientHeight - mh - 6);
+  menu.style.left = Math.max(window.scrollX + 6, x) + 'px';
+  menu.style.top = Math.max(window.scrollY + 6, y) + 'px';
 }
 
 // Farbiger Turm-Marker (für den Wachführer, da circleMarker nicht draggable ist).
