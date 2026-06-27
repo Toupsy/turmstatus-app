@@ -9,6 +9,7 @@ const sqlite3 = require('sqlite3');
 const bcryptjs = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
+const { passwordHashRounds } = require('../password');
 
 // Ensure data directory exists
 const dataDir = process.env.DATABASE_PATH
@@ -346,7 +347,7 @@ function seedAdmin(db, done) {
 
     if (row.count === 0 && autoUser && autoPass) {
       try {
-        const hash = await bcryptjs.hash(autoPass, 10);
+        const hash = await bcryptjs.hash(autoPass, passwordHashRounds());
         db.run(
           "INSERT INTO users (username, password_hash, full_name, role, is_admin) VALUES (?, ?, ?, 'HAUPTWACHE', 1)",
           [autoUser, hash, 'Hauptwache'],

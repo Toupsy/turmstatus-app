@@ -18,6 +18,7 @@ const { parsePositiveInt } = require('../db/ids');
 const { requireAuth, requireWachfuehrer } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
+const { passwordHashRounds } = require('../password');
 
 // Rollen, die ein Wachführer für seine Wache anlegen/verwalten darf.
 const TEAM_ROLES = ['WACHGAENGER', 'BOOTSFUEHRER'];
@@ -71,7 +72,7 @@ router.post('/members', express.json(), async (req, res) => {
     const tower = await ownTowerOrNull(req, towerId);
     if (!tower.ok) return res.status(400).json({ error: 'Turm gehört nicht zur eigenen Wache' });
 
-    const hash = await bcryptjs.hash(password, 10);
+    const hash = await bcryptjs.hash(password, passwordHashRounds());
     // owner_id wird ZWINGEND auf den anlegenden Wachführer gesetzt; is_admin immer 0.
     const result = await dbRun(
       'INSERT INTO users (username, password_hash, full_name, role, tower_id, owner_id, is_admin) VALUES (?, ?, ?, ?, ?, ?, 0)',
@@ -142,7 +143,7 @@ router.post('/members/:id/reset-password', express.json(), async (req, res) => {
     if (error === 404) return res.status(404).json({ error: 'User not found' });
     if (error === 403) return res.status(403).json({ error: 'Kein Mitglied der eigenen Wache' });
 
-    const hash = await bcryptjs.hash(newPassword, 10);
+    const hash = await bcryptjs.hash(newPassword, passwordHashRounds());
     await dbRun('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [hash, id]);
     await recordAudit(req, 'team_password_reset', 'user', id);
     res.json({ id, message: 'Password reset' });

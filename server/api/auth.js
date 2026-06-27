@@ -9,6 +9,7 @@ const router = express.Router();
 const bcryptjs = require('bcryptjs');
 const { dbRun, dbGet } = require('../db/connection');
 const { recordAudit } = require('../db/audit');
+const { passwordHashRounds } = require('../password');
 
 const MIN_PASSWORD_LENGTH = 10;
 const REGISTRATION_MODE = process.env.REGISTRATION_MODE || 'disabled'; // disabled | open | code
@@ -184,7 +185,7 @@ router.post('/init', express.json(), async (req, res) => {
       return res.status(403).json({ error: 'Admin user already exists' });
     }
 
-    const passwordHash = await bcryptjs.hash(password, 10);
+    const passwordHash = await bcryptjs.hash(password, passwordHashRounds());
     await dbRun(
       "INSERT INTO users (username, password_hash, full_name, role, is_admin) VALUES (?, ?, ?, 'HAUPTWACHE', 1)",
       [username, passwordHash, 'Hauptwache']
@@ -230,7 +231,7 @@ router.post('/register', express.json(), async (req, res) => {
       }
     }
 
-    const passwordHash = await bcryptjs.hash(password, 10);
+    const passwordHash = await bcryptjs.hash(password, passwordHashRounds());
     // Selbstregistrierte Nutzer sind immer Wachgänger ohne Admin-Rechte.
     await dbRun(
       "INSERT INTO users (username, password_hash, role, is_admin) VALUES (?, ?, 'WACHGAENGER', 0)",
@@ -282,7 +283,7 @@ router.put('/password', express.json(), async (req, res) => {
     const valid = await bcryptjs.compare(currentPassword, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Current password incorrect' });
 
-    const newHash = await bcryptjs.hash(newPassword, 10);
+    const newHash = await bcryptjs.hash(newPassword, passwordHashRounds());
     await dbRun('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newHash, req.session.userId]);
     recordAudit(req, 'password_change', 'user', req.session.userId);
     res.json({ success: true, message: 'Password changed' });

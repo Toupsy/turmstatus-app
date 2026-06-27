@@ -82,15 +82,36 @@ function openMapContextMenu(originalEvent, lat, lng, items) {
   menu.style.top = Math.max(window.scrollY + 6, y) + 'px';
 }
 
+function _markerShell(pinClass, symbol, title) {
+  return `<div class="map-marker-shell" title="${escapeHtml(title || '')}">` +
+    `<div class="map-marker-pulse"></div>` +
+    `<div class="map-marker-stem"></div>` +
+    `<div class="map-marker-pin ${pinClass}"></div>` +
+    `<div class="map-marker-symbol">${symbol}</div>` +
+    `</div>`;
+}
+
 // Farbiger Turm-Marker (für den Wachführer, da circleMarker nicht draggable ist).
 function _towerIcon(status) {
-  const color = TOWER_COLORS[status] || '#888';
+  const safeStatus = TOWER_COLORS[status] ? status : 'UNKNOWN';
   return L.divIcon({
-    className: 'tower-marker',
-    html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};` +
-          `border:2px solid #06131c;box-shadow:0 0 4px rgba(0,0,0,.6)"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9]
+    className: 'map-marker-icon tower-marker',
+    html: _markerShell(`tower-marker-pin status-${safeStatus}`, '🛟', 'Turm'),
+    iconSize: [34, 42],
+    iconAnchor: [17, 41],
+    popupAnchor: [0, -36]
+  });
+}
+
+function _boatIcon(status) {
+  const knownBoatStatuses = ['AVAILABLE', 'READY', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
+  const safeStatus = knownBoatStatuses.includes(status) ? status : 'UNKNOWN';
+  return L.divIcon({
+    className: 'map-marker-icon boat-marker',
+    html: _markerShell(`boat-marker-pin status-${safeStatus}`, '⛵', 'Boot'),
+    iconSize: [34, 42],
+    iconAnchor: [17, 41],
+    popupAnchor: [0, -36]
   });
 }
 
@@ -105,10 +126,11 @@ function setAddTowerMode(on) {
 
 function _emojiIcon(emoji) {
   return L.divIcon({
-    className: 'emoji-marker',
-    html: `<div style="font-size:20px;line-height:1;text-shadow:0 0 3px #000">${emoji}</div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
+    className: 'map-marker-icon emoji-marker',
+    html: _markerShell('emoji-marker-pin', emoji, ''),
+    iconSize: [30, 36],
+    iconAnchor: [15, 35],
+    popupAnchor: [0, -31]
   });
 }
 
@@ -140,13 +162,9 @@ function renderMap() {
       });
       marker.bindPopup(popup).addTo(_markerLayer);
     } else {
-      L.circleMarker([t.latitude, t.longitude], {
-        radius: 11,
-        color: TOWER_COLORS[t.status] || '#888',
-        fillColor: TOWER_COLORS[t.status] || '#888',
-        fillOpacity: 0.65,
-        weight: 2
-      }).bindPopup(popup).addTo(_markerLayer);
+      L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status) })
+        .bindPopup(popup)
+        .addTo(_markerLayer);
     }
   });
 
@@ -162,7 +180,7 @@ function renderMap() {
   // Boote
   boats.forEach(b => {
     if (b.latitude == null || b.longitude == null) return;
-    L.marker([b.latitude, b.longitude], { icon: _emojiIcon('⛵') })
+    L.marker([b.latitude, b.longitude], { icon: _boatIcon(b.status) })
       .bindPopup(`<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
         escapeHtml(labelOf('boatStatus', b.status)))
       .addTo(_markerLayer);
@@ -203,7 +221,7 @@ function renderTemplateMap() {
 
   (typeof towerTemplates !== 'undefined' ? towerTemplates : []).forEach(t => {
     if (t.latitude == null || t.longitude == null) return;
-    const marker = L.marker([t.latitude, t.longitude], { icon: _emojiIcon('📍'), draggable: true });
+    const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon('GREEN'), draggable: true });
     marker.on('dragend', (ev) => {
       const ll = ev.target.getLatLng();
       moveTowerTemplate(t.id, ll.lat, ll.lng);
@@ -219,7 +237,7 @@ function renderTemplateMap() {
 
   (typeof boatTemplates !== 'undefined' ? boatTemplates : []).forEach(b => {
     if (b.latitude == null || b.longitude == null) return;
-    const marker = L.marker([b.latitude, b.longitude], { icon: _emojiIcon('⛵'), draggable: true });
+    const marker = L.marker([b.latitude, b.longitude], { icon: _boatIcon(b.status), draggable: true });
     marker.on('dragend', (ev) => {
       const ll = ev.target.getLatLng();
       moveBoatTemplate(b.id, ll.lat, ll.lng);

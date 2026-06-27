@@ -67,6 +67,23 @@
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media(max-width:600px){.grid2{grid-template-columns:1fr}}
   .hidden{display:none !important}
+  .leaflet-div-icon.map-marker-icon{background:transparent;border:none}
+  .map-marker-shell{position:relative;width:34px;height:42px;filter:drop-shadow(0 8px 10px rgba(0,0,0,.42));transform:translateZ(0)}
+  .map-marker-pin{position:absolute;left:50%;top:1px;width:30px;height:30px;transform:translateX(-50%) rotate(45deg);border:2px solid rgba(232,244,248,.96);border-radius:50% 50% 50% 8px;background:linear-gradient(135deg,#18a8d8,#0d7ca8);box-shadow:inset 0 1px 7px rgba(255,255,255,.26),0 0 0 2px rgba(6,19,32,.72)}
+  .map-marker-symbol{position:absolute;left:50%;top:4px;width:26px;height:26px;transform:translateX(-50%);display:grid;place-items:center;color:#061320;font-size:15px;font-weight:900;line-height:1;text-shadow:0 1px 0 rgba(255,255,255,.32);z-index:1}
+  .map-marker-stem{position:absolute;left:50%;bottom:1px;width:2px;height:10px;transform:translateX(-50%);background:rgba(232,244,248,.92);box-shadow:0 2px 5px rgba(0,0,0,.45)}
+  .map-marker-pulse{position:absolute;left:50%;bottom:1px;width:18px;height:7px;transform:translateX(-50%);border-radius:50%;background:rgba(6,19,32,.35);box-shadow:0 0 0 1px rgba(127,212,232,.13)}
+  .tower-marker-pin.status-GREEN{background:linear-gradient(135deg,var(--green),var(--green-deep))}
+  .tower-marker-pin.status-YELLOW{background:linear-gradient(135deg,var(--warn),#d68122)}
+  .tower-marker-pin.status-RED{background:linear-gradient(135deg,var(--coral),var(--coral-deep))}
+  .tower-marker-pin.status-UNKNOWN{background:linear-gradient(135deg,#9bb0bd,#536675)}
+  .boat-marker-pin.status-AVAILABLE,.boat-marker-pin.status-READY{background:linear-gradient(135deg,var(--foam),var(--sea))}
+  .boat-marker-pin.status-PATROL,.boat-marker-pin.status-DEPLOYED{background:linear-gradient(135deg,var(--warn),#d68122)}
+  .boat-marker-pin.status-OUT_OF_SERVICE{background:linear-gradient(135deg,var(--coral),var(--coral-deep))}
+  .boat-marker-pin.status-UNKNOWN{background:linear-gradient(135deg,#9bb0bd,#536675)}
+  .emoji-marker .map-marker-shell{width:30px;height:36px}
+  .emoji-marker .map-marker-pin{width:26px;height:26px}
+  .emoji-marker .map-marker-symbol{top:3px;font-size:15px}
   /* Rechtsklick-Kontextmenü auf der Karte (Wachführer): Turm/Boot an der Klickposition anlegen. */
   .map-context-menu{position:absolute;display:none;z-index:1500;background:linear-gradient(165deg,var(--navy-2),var(--paper));border:1px solid var(--line-strong);border-radius:10px;padding:5px;box-shadow:0 6px 24px rgba(0,0,0,.5);min-width:190px}
   .map-context-menu .ctx-coord{font-size:.74rem;color:var(--text-dim);padding:4px 10px 6px}
