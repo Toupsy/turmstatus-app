@@ -3,6 +3,10 @@
 // ============================================================
 
 async function _req(method, url, body) {
+  // Preview-/Demo-Modus (Cloudflare Worker ohne Backend): In-Memory-Mock statt fetch.
+  if (typeof PREVIEW_MODE !== 'undefined' && PREVIEW_MODE) {
+    return Promise.resolve().then(() => previewRequest(method, url, body));
+  }
   const opts = { method, credentials: 'include', headers: {} };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
