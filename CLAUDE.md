@@ -62,7 +62,7 @@ api/boats.js       Boote: Liste, CRUD, Status/Position, Turm-Zuordnung – owner
 api/requests.js    -1/+1-Workflow: beantragen → genehmigen/ablehnen → Rückkehr; owner-scoped (Owner-WF entscheidet)
 api/control-trips.js Kontrollfahrt-Anfragen: Bootsführer beantragt → Owner-WF (dem das Boot gehört) genehmigt/lehnt ab (Admin view-only); NOCH ohne Boot-Statuslogik – grober Workflow-Rahmen
 api/dashboard.js   GET /summary – Lage-Kennzahlen (owner-scoped; Admin: alle)
-api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers + Demo-Konfiguration (tower_templates CRUD; bei WF-Anlage als Start-Türme in dessen Scope geklont)
+api/admin.js       App-Admin (is_admin): Benutzerverwaltung (legt v.a. WACHFUEHRER an) + Audit-Log + GET /towers + Demo-Konfiguration (tower_templates + boat_templates CRUD; bei WF-Anlage als Start-Türme/-Boote in dessen Scope geklont, geerbte Boote ohne Turm-Zuordnung)
 api/team.js        Wachführer verwalten EIGENES Wachpersonal (WACHGAENGER/BOOTSFUEHRER), streng über users.owner_id gescoped (Mandant = Wachführer)
 ```
 **Pfad-Konvention:** `server/*` → `../public`/`../data`; `server/db/*` → `../../data`.
@@ -74,8 +74,8 @@ utils.js   escapeHtml, showToast, fmtTime, labelOf, statusPill, openModal/closeM
 preview.js Demo-/Preview-Modus (Cloudflare-Worker ohne Backend): PREVIEW_MODE + In-Memory-API-Mock previewRequest() + Demo-Datensatz → kein Login (api.js/auth.js/ws.js prüfen PREVIEW_MODE)
 api.js     apiGet/apiPost/apiPatch/apiDelete (Session-Cookies, JSON; im Preview-Modus → previewRequest)
 auth.js    Login/Setup/Register-Modal + User-Header + Passwortwechsel
-map.js     Leaflet-Karte: initMap(), renderMap(); Wachführer: Türme als verschiebbare Marker (Drag→PATCH) + „Turm auf Karte setzen" (Klick→Modal) + Rechtsklick-Kontextmenü „Turm/Boot hier anlegen" (contextmenu→Modal mit vorbefüllter lat/lng); sonst farbcodierte circleMarker
-views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1- & Kontrollfahrt-Aktionen + Turm-/Boot-Verwaltung (Wachführer: anlegen/bearbeiten/löschen, Boot↔Turm-Zuordnung); Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
+map.js     Leaflet-Karte: initMap(), renderMap(); Wachführer: Türme als verschiebbare Marker (Drag→PATCH) + „Turm auf Karte setzen" (Klick→Modal) + Rechtsklick-Kontextmenü „Turm/Boot hier anlegen" (contextmenu→Modal mit vorbefüllter lat/lng); sonst farbcodierte circleMarker. Zusätzlich Demo-Konfig-Karte (Admin): initTemplateMap()/renderTemplateMap() – Vorlagen-Türme/-Boote als verschiebbare 📍/⛵-Marker (Drag→PATCH) + Rechtsklick-Anlegen; generisches openMapContextMenu()
+views.js   Datenladen (refreshX) + Rendering aller Tabellen/Modals + -1/+1- & Kontrollfahrt-Aktionen + Turm-/Boot-Verwaltung (Wachführer: anlegen/bearbeiten/löschen, Boot↔Turm-Zuordnung); Demo-Konfiguration (Admin): tower-/boat-Vorlagen-Tabellen+Modals (render/open/save/delete*Template, move*Template); Benutzerverwaltung schaltet per userApiBase() zwischen /api/admin/users (App-Admin) und /api/team/members (Wachführer)
 ws.js      WebSocket-Client (/api/ws) → Refresh je Event + 30-s-Polling-Fallback
 init.js    Bootstrap: Config laden → Auth → onAuthenticated(); Tab-Steuerung; Event-Listener
 ```
@@ -92,6 +92,7 @@ towers  id, name, call_sign, latitude, longitude, required_staff, owner_id(FK→
 tower_templates  id, name, call_sign, latitude, longitude, required_staff, created_at  (Demo-Konfiguration: Admin-gepflegt, bei WF-Anlage in towers(owner_id) kopiert)
 guards  id, user_id(FK), tower_id(FK), name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], lat, lng, owner_id(FK→users), updated_at
 boats   id, name, call_sign, tower_id(FK), status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], lat, lng, owner_id(FK→users), updated_at
+boat_templates   id, name, call_sign, status[AT_TOWER|…], latitude, longitude, created_at  (Demo-Konfiguration: Admin-gepflegt, bei WF-Anlage in boats(owner_id) kopiert – ohne Turm-Zuordnung)
 minus_one_requests  id, guard_id(FK), requested_by(FK), reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER],
                     note, status[PENDING|APPROVED|REJECTED|RETURNED], rejection_reason,
                     created_at, decided_at, decided_by(FK), returned_at

@@ -13,6 +13,7 @@ let requests = [];           // [{ id, guardId, guardName, reason, note, status,
 let users = [];              // (Admin/Wachführer) [{ id, username, role, ... }]
 let controlTrips = [];       // [{ id, boatId, boatName, status, ... }] Kontrollfahrt-Anfragen
 let towerTemplates = [];     // (Admin) Demo-Konfiguration: Vorlagen-Türme für neue Wachführer
+let boatTemplates = [];      // (Admin) Demo-Konfiguration: Vorlagen-Boote für neue Wachführer
 
 let activeTab = 'map';       // aktueller Tab
 
@@ -20,6 +21,10 @@ let activeTab = 'map';       // aktueller Tab
 let _map = null;
 let _markerLayer = null;
 let _addTowerMode = false;   // true: nächster Karten-Klick legt einen Turm an (Wachführer)
+
+// Demo-Konfigurations-Karte (Admin positioniert Vorlagen-Türme/-Boote)
+let _templateMap = null;
+let _templateMarkerLayer = null;
 
 // Rollen-Helfer
 const isHauptwache = () => currentUser && currentUser.role === 'HAUPTWACHE';

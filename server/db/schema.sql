@@ -46,6 +46,19 @@ CREATE TABLE IF NOT EXISTS tower_templates (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Demo-Konfiguration: Boote-Vorlage. Vom App-Admin gepflegt; beim Anlegen jedes
+-- neuen Wachführer-Kontos werden diese Boote als Startkonfiguration in dessen Scope
+-- (boats.owner_id = neuer Wachführer) kopiert. Wie tower_templates, mit Status/Position.
+CREATE TABLE IF NOT EXISTS boat_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  call_sign TEXT,
+  status TEXT NOT NULL DEFAULT 'AT_TOWER',     -- AT_TOWER | PATROL | DEPLOYED | OUT_OF_SERVICE
+  latitude REAL,
+  longitude REAL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Wachgänger (Lageobjekt / mobile Einheit)
 CREATE TABLE IF NOT EXISTS guards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

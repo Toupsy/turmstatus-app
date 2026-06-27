@@ -29,6 +29,14 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(s =>
     s.classList.toggle('active', s.id === 'tab-' + tab));
   if (tab === 'map' && _map) setTimeout(() => _map.invalidateSize(), 50);
+  // Demo-Konfigurations-Karte (Admin) erst beim Öffnen des Verwaltung-Tabs initialisieren
+  // (Leaflet braucht einen sichtbaren Container für korrekte Größe).
+  if (tab === 'admin' && typeof canManage === 'function' && canManage()) {
+    const panel = document.getElementById('template-map-panel');
+    if (panel) panel.style.display = '';
+    initTemplateMap();
+    renderTemplateMap();
+  }
 }
 
 // ── Event-Listener verdrahten ────────────────────────────────
@@ -90,6 +98,11 @@ function wireEvents() {
   document.getElementById('btn-new-template').onclick = () => openTemplateModal(null);
   document.getElementById('template-modal-cancel').onclick = () => closeModal('template-modal');
   document.getElementById('template-modal-save').onclick = saveTemplate;
+
+  // Demo-Konfiguration (Vorlagen-Boote, Admin)
+  document.getElementById('btn-new-boat-template').onclick = () => openBoatTemplateModal(null);
+  document.getElementById('boat-template-modal-cancel').onclick = () => closeModal('boat-template-modal');
+  document.getElementById('boat-template-modal-save').onclick = saveBoatTemplate;
 
   // Klick auf Modal-Hintergrund schließt
   document.querySelectorAll('.modal').forEach(m => {
