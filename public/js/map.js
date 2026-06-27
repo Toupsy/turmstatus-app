@@ -92,15 +92,20 @@ function _markerShell(pinClass, symbol, title) {
 }
 
 // Farbiger Turm-Marker (für den Wachführer, da circleMarker nicht draggable ist).
-function _towerIcon(status) {
+function _towerIcon(status, hasBoat) {
   const safeStatus = TOWER_COLORS[status] ? status : 'UNKNOWN';
+  const boatBadge = hasBoat ? '<div class="map-marker-boat-badge" title="Boot zugeordnet">⛵</div>' : '';
   return L.divIcon({
-    className: 'map-marker-icon tower-marker',
-    html: _markerShell(`tower-marker-pin status-${safeStatus}`, '🛟', 'Turm'),
-    iconSize: [34, 42],
-    iconAnchor: [17, 41],
-    popupAnchor: [0, -36]
+    className: `map-marker-icon tower-marker${hasBoat ? ' has-boat' : ''}`,
+    html: _markerShell(`tower-marker-pin status-${safeStatus}`, hasBoat ? '🛟' : '🛟', hasBoat ? 'Turm mit Boot' : 'Turm') + boatBadge,
+    iconSize: [38, 44],
+    iconAnchor: [19, 43],
+    popupAnchor: [0, -38]
   });
+}
+
+function _towerHasBoat(towerId) {
+  return boats.some(b => b.towerId === towerId);
 }
 
 function _boatIcon(status) {
@@ -134,19 +139,33 @@ function _emojiIcon(emoji) {
   });
 }
 
+function scheduleRenderMap() {
+  if (_renderMapScheduled) return;
+  _renderMapScheduled = true;
+  const run = () => {
+    _renderMapScheduled = false;
+    renderMap();
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 0);
+}
+
 function renderMap() {
   if (!_map) return;
   _markerLayer.clearLayers();
 
   // Türme: für den Wachführer als verschiebbare Marker (Positionieren), sonst als
-  // farbcodierte Kreise (reine Anzeige).
+  // farbcodierte Marker (reine Anzeige). Türme mit zugeordnetem Boot erhalten
+  // einen Badge + goldene Hervorhebung, damit sie sofort anders erkennbar sind.
   const canEditTowers = typeof isWachfuehrer === 'function' && isWachfuehrer();
   towers.forEach(t => {
     if (t.latitude == null || t.longitude == null) return;
+    const hasBoat = _towerHasBoat(t.id);
     let popup =
       `<b>${escapeHtml(t.name)}</b> ${t.callSign ? '(' + escapeHtml(t.callSign) + ')' : ''}<br>` +
       `Status: ${escapeHtml(labelOf('towerStatus', t.status))}<br>` +
-      `Besetzung: ${t.currentStaff}/${t.requiredStaff}`;
+      `Besetzung: ${t.currentStaff}/${t.requiredStaff}` +
+      (hasBoat ? '<br><b>⛵ Boot zugeordnet</b>' : '');
     if (canEditTowers) {
       popup += `<br><div style="margin-top:6px;display:flex;align-items:center;gap:6px">` +
         `Anwesend: <button onclick="adjustTowerPresent(${t.id}, -1)" ${t.presentStaff <= 0 ? 'disabled' : ''}>−</button>` +
@@ -155,14 +174,14 @@ function renderMap() {
       popup += `<div style="margin-top:6px;display:flex;gap:6px">` +
         `<button onclick="openTowerById(${t.id})">Bearbeiten</button>` +
         `<button class="danger" onclick="deleteTower(${t.id})">Löschen</button></div>`;
-      const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status), draggable: true });
+      const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat), draggable: true });
       marker.on('dragend', (ev) => {
         const ll = ev.target.getLatLng();
         moveTower(t.id, ll.lat, ll.lng);
       });
       marker.bindPopup(popup).addTo(_markerLayer);
     } else {
-      L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status) })
+      L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) })
         .bindPopup(popup)
         .addTo(_markerLayer);
     }
@@ -221,7 +240,7 @@ function renderTemplateMap() {
 
   (typeof towerTemplates !== 'undefined' ? towerTemplates : []).forEach(t => {
     if (t.latitude == null || t.longitude == null) return;
-    const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon('GREEN'), draggable: true });
+    const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon('GREEN', false), draggable: true });
     marker.on('dragend', (ev) => {
       const ll = ev.target.getLatLng();
       moveTowerTemplate(t.id, ll.lat, ll.lng);

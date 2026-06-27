@@ -77,6 +77,9 @@
   .tower-marker-pin.status-YELLOW{background:linear-gradient(135deg,var(--warn),#d68122)}
   .tower-marker-pin.status-RED{background:linear-gradient(135deg,var(--coral),var(--coral-deep))}
   .tower-marker-pin.status-UNKNOWN{background:linear-gradient(135deg,#9bb0bd,#536675)}
+  .tower-marker.has-boat .tower-marker-pin{border-color:#fff7c7;box-shadow:inset 0 1px 7px rgba(255,255,255,.3),0 0 0 2px rgba(255,179,71,.85),0 0 18px rgba(255,179,71,.42)}
+  .tower-marker.has-boat .map-marker-symbol{transform:translateX(-50%) translateY(-1px);font-size:14px}
+  .map-marker-boat-badge{position:absolute;right:-5px;top:-4px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--foam),var(--sea));border:2px solid #fff7c7;font-size:10px;line-height:1;z-index:2;box-shadow:0 2px 7px rgba(0,0,0,.48)}
   .boat-marker-pin.status-AVAILABLE,.boat-marker-pin.status-READY{background:linear-gradient(135deg,var(--foam),var(--sea))}
   .boat-marker-pin.status-PATROL,.boat-marker-pin.status-DEPLOYED{background:linear-gradient(135deg,var(--warn),#d68122)}
   .boat-marker-pin.status-OUT_OF_SERVICE{background:linear-gradient(135deg,var(--coral),var(--coral-deep))}
@@ -186,7 +189,7 @@
           <span><span class="dot green"></span>Turm besetzt</span>
           <span><span class="dot yellow"></span>reduziert</span>
           <span><span class="dot red"></span>kritisch</span>
-          <span>🚩 Wachgänger · ⛵ Boot</span>
+          <span>🛟 Turm · 🛟⛵ Turm mit Boot · 🚩 Wachgänger · ⛵ Boot</span>
         </div>
       </div>
     </section>

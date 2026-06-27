@@ -8,17 +8,17 @@
 async function refreshTowers() {
   towers = (await apiGet('/api/towers')).towers;
   renderTowers();
-  renderMap();
+  scheduleRenderMap();
 }
 async function refreshGuards() {
   guards = (await apiGet('/api/guards')).guards;
   renderGuards();
-  renderMap();
+  scheduleRenderMap();
 }
 async function refreshBoats() {
   boats = (await apiGet('/api/boats')).boats;
   renderBoats();
-  renderMap();
+  scheduleRenderMap();
 }
 async function refreshRequests() {
   requests = (await apiGet('/api/requests')).requests;
@@ -58,14 +58,23 @@ async function refreshAdmin() {
 }
 
 async function refreshAll() {
-  await Promise.all([
-    refreshTowers().catch(e => console.error(e)),
-    refreshGuards().catch(e => console.error(e)),
-    refreshBoats().catch(e => console.error(e)),
-    refreshRequests().catch(e => console.error(e)),
-    refreshControlTrips().catch(e => console.error(e)),
-    refreshDashboard().catch(e => console.error(e))
+  const [towerResult, guardResult, boatResult, requestResult, controlTripResult, summaryResult] = await Promise.all([
+    apiGet('/api/towers').catch(e => { console.error(e); return null; }),
+    apiGet('/api/guards').catch(e => { console.error(e); return null; }),
+    apiGet('/api/boats').catch(e => { console.error(e); return null; }),
+    apiGet('/api/requests').catch(e => { console.error(e); return null; }),
+    apiGet('/api/control-trips').catch(e => { console.error(e); return null; }),
+    apiGet('/api/dashboard/summary').catch(e => { console.error(e); return null; })
   ]);
+
+  if (towerResult) { towers = towerResult.towers; renderTowers(); }
+  if (guardResult) { guards = guardResult.guards; renderGuards(); }
+  if (boatResult) { boats = boatResult.boats; renderBoats(); }
+  if (requestResult) { requests = requestResult.requests; renderRequests(); }
+  if (controlTripResult) { controlTrips = controlTripResult.controlTrips; renderControlTrips(); }
+  if (summaryResult) renderSummary(summaryResult);
+  scheduleRenderMap();
+
   if (canManage() || canManageTeam()) await refreshAdmin().catch(e => console.error(e));
 }
 

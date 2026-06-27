@@ -21,6 +21,7 @@ let activeTab = 'map';       // aktueller Tab
 let _map = null;
 let _markerLayer = null;
 let _addTowerMode = false;   // true: nächster Karten-Klick legt einen Turm an (Wachführer)
+let _renderMapScheduled = false; // bündelt mehrere Daten-Refreshes in ein Karten-Rendern
 
 // Demo-Konfigurations-Karte (Admin positioniert Vorlagen-Türme/-Boote)
 let _templateMap = null;
