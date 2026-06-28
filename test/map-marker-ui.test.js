@@ -23,6 +23,13 @@ test('Kartenmarker haben gestaltete Turm- und Boot-Icons', () => {
   assert.match(mapJs, /map-marker-boat-badge/, 'Turm-mit-Boot-Badge fehlt');
 });
 
+test('Türme tragen ein dauerhaftes, lesbares Namens-Label auf der Karte', () => {
+  assert.match(mapJs, /function _bindTowerLabel\(/, 'Turm-Label-Helfer fehlt');
+  assert.match(mapJs, /permanent:\s*true/, 'Turm-Label muss dauerhaft sichtbar sein');
+  assert.match(mapJs, /_bindTowerLabel\(marker, t\)/, 'Turm-Marker müssen das Namens-Label binden');
+  assert.match(html, /\.leaflet-tooltip\.tower-label/, 'Turm-Label-CSS fehlt');
+});
+
 test('Kartenrendering wird gebündelt statt bei jedem Datenrefresh sofort neu gebaut', () => {
   assert.match(mapJs, /function scheduleRenderMap\(\)/, 'Debounced Render-Scheduler fehlt');
   assert.match(mapJs, /requestAnimationFrame/, 'Kartenrendering soll per Animation-Frame gebündelt werden');

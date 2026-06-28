@@ -152,6 +152,24 @@ function _towerHasBoat(towerId) {
   return boats.some(b => b.towerId === towerId);
 }
 
+// Dauerhaftes, gut lesbares Namens-Label am Turm-Marker (sonst steht der Name
+// nur im Popup → Türme auf der Karte kaum unterscheidbar). Hoher Kontrast
+// (dunkle Plakette, heller Text), Status als farbiger Akzentstreifen.
+function _bindTowerLabel(marker, tower) {
+  const safeStatus = TOWER_COLORS[tower.status] ? tower.status : 'UNKNOWN';
+  const callSign = tower.callSign ? `<span class="tower-label-call">${escapeHtml(tower.callSign)}</span>` : '';
+  marker.bindTooltip(
+    `<span class="tower-label-name">${escapeHtml(tower.name)}</span>${callSign}`,
+    {
+      permanent: true,
+      direction: 'bottom',
+      offset: [0, 4],
+      className: `tower-label status-${safeStatus}`,
+      interactive: false
+    }
+  );
+}
+
 function _boatIcon(status) {
   const knownBoatStatuses = ['AVAILABLE', 'READY', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
   const safeStatus = knownBoatStatuses.includes(status) ? status : 'UNKNOWN';
@@ -223,11 +241,12 @@ function renderMap() {
         const ll = ev.target.getLatLng();
         moveTower(t.id, ll.lat, ll.lng);
       });
+      _bindTowerLabel(marker, t);
       marker.bindPopup(popup).addTo(_markerLayer);
     } else {
-      L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) })
-        .bindPopup(popup)
-        .addTo(_markerLayer);
+      const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) });
+      _bindTowerLabel(marker, t);
+      marker.bindPopup(popup).addTo(_markerLayer);
     }
   });
 
