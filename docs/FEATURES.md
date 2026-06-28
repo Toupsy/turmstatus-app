@@ -2,6 +2,21 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Fix: Boot-/Anfrage-Änderungen wirken sofort auf die Türme (Live-Reaktivität)
+
+Eine Boot-Status-Änderung (z. B. im Dashboard) brauchte bis zu **30 Sekunden**, bis Turm-Tabelle
+und Kartenfarben sie widerspiegelten – sie aktualisierten sich nur über den Polling-Fallback.
+
+- **Ursache:** Turmfarbe & effektive Sollstärke werden **serverseitig** in `GET /api/towers` aus
+  Wachgänger- **und** Boots-Status berechnet. Im WebSocket-Client (`public/js/ws.js`) lud das Event
+  `boats-updated` aber nur `refreshBoats()`/`refreshDashboard()` – **nicht** `refreshTowers()`.
+  Die Türme blieben daher bis zum nächsten 30-s-Poll (`refreshAll`) stehen.
+- **Fix (`public/js/ws.js`):** `boats-updated` ruft jetzt zusätzlich `refreshTowers()`. Analog ruft
+  `requests-updated` jetzt ebenfalls `refreshTowers()`, da ein genehmigtes/zurückgemeldetes **-1**
+  den Wachgänger-Status und damit die Ist-Besetzung der Türme ändert.
+- **Wirkung:** Türme reagieren jetzt praktisch sofort (WS-Latenz statt bis zu 30 s) auf Boots- und
+  -1/+1-Änderungen. Keine Backend-/Datenmodell-Änderung.
+
 ## Boots-abhängige Sollstärke + farbige Boots-Anmerkung im Dashboard
 
 Die Sollstärke eines Turms hängt jetzt vom **Boots-Status** ab, und das Dashboard zeigt die
