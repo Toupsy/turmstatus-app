@@ -2,6 +2,28 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Boot-Status direkt aus der Türme-Tabelle ändern (schnellere Reaktion)
+
+Der Wachführer kann den **Boot-Status** jetzt direkt in der **Boot-Spalte der Türme-Tabelle**
+ändern – ohne den Umweg über den Boote-Tab. Damit lässt sich beim Lagebild der Türme sofort
+reagieren (z. B. „Boot auf Streife" setzen).
+
+- **UI (`public/js/views.js`):** `towerBoatAnnotation(t)` leitet die Boote eines Turms jetzt aus
+  dem lokalen `boats`-Zustand ab (statt aus den server-aggregierten Flags `boatsAtTower` usw.) und
+  rendert pro Boot:
+  - **Wachführer** → ein Status-`<select>` (ruft das bestehende `setBoatStatus`) + Warnung
+    „⚠ nicht am Turm" bei `PATROL`/`DEPLOYED`.
+  - **andere Rollen / Admin** → reine farbcodierte Status-Pille je Boot (Ansicht).
+- **Optimistik:** `setBoatStatus` rendert jetzt zusätzlich Boote- **und** Türme-Tabelle sofort neu
+  (vorher nur Karte); der nachfolgende WS-Refresh (`boats-updated` → Boote + Türme + Dashboard)
+  gleicht effektive Sollstärke/Turmfarbe verbindlich ab.
+- **Render-Reihenfolge (`refreshAll`):** Da die Türme-Tabelle nun aus `boats` liest, werden in
+  `refreshAll` erst alle Zustände gesetzt und danach gerendert (Boote vor Türmen).
+- **CSS (`Turmstatus.html`):** `.boat-annotation` stapelt mehrere Boote untereinander; neue
+  `.boat-line` je Boot.
+- **Backend/Preview:** unverändert – nutzt den bestehenden `PATCH /api/boats/:id`; Preview-Mock
+  deckt das bereits ab. `npm test` → **41/41 grün**.
+
 ## Fix: Boot-/Anfrage-Änderungen wirken sofort auf die Türme (Live-Reaktivität)
 
 Eine Boot-Status-Änderung (z. B. im Dashboard) brauchte bis zu **30 Sekunden**, bis Turm-Tabelle

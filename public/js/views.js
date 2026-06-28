@@ -67,11 +67,19 @@ async function refreshAll() {
     apiGet('/api/dashboard/summary').catch(e => { console.error(e); return null; })
   ]);
 
-  if (towerResult) { towers = towerResult.towers; renderTowers(); }
-  if (guardResult) { guards = guardResult.guards; renderGuards(); }
-  if (boatResult) { boats = boatResult.boats; renderBoats(); }
-  if (requestResult) { requests = requestResult.requests; renderRequests(); }
-  if (controlTripResult) { controlTrips = controlTripResult.controlTrips; renderControlTrips(); }
+  // Erst ALLE Zustände setzen, dann rendern: renderTowers() liest die Boot-Spalte aus
+  // dem `boats`-Zustand, daher müssen die Boote vor dem Türme-Rendern gesetzt sein.
+  if (towerResult) towers = towerResult.towers;
+  if (guardResult) guards = guardResult.guards;
+  if (boatResult) boats = boatResult.boats;
+  if (requestResult) requests = requestResult.requests;
+  if (controlTripResult) controlTrips = controlTripResult.controlTrips;
+
+  if (boatResult) renderBoats();
+  if (towerResult) renderTowers();
+  if (guardResult) renderGuards();
+  if (requestResult) renderRequests();
+  if (controlTripResult) renderControlTrips();
   if (summaryResult) renderSummary(summaryResult);
   scheduleRenderMap();
 
@@ -132,18 +140,28 @@ function renderTowers() {
     `<table><thead><tr><th>Turm</th><th>Funk</th><th>Besetzung</th><th>Status</th><th>Boot</th><th>Position</th>${canEdit ? '<th>Aktion</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-// Visuelle, farbcodierte Boots-Anmerkung eines Turms für die Lageübersicht:
-//   kein Boot          → neutral
-//   Boot am Turm       → grün  (Sollstärke +1 Bootsführer)
-//   Boot außer Dienst  → rot   (defekt → wie normaler Turm behandelt)
-//   Boot unterwegs     → gelb + Warnung „nicht am Turm" (Streife/Einsatz)
+// Visuelle, farbcodierte Boots-Anmerkung eines Turms für die Lageübersicht.
+// Boote werden aus dem lokalen `boats`-Zustand abgeleitet (statt aus den server-
+// aggregierten Flags), damit der Wachführer den Boot-Status direkt hier ändern kann
+// und die Änderung sofort optimistisch erscheint (kein Umweg über den Boote-Tab).
+//   Wachführer → pro Boot ein Status-Dropdown (setBoatStatus) + Warnung „nicht am Turm"
+//   sonst      → farbcodierte Status-Pille je Boot (reine Ansicht)
 function towerBoatAnnotation(t) {
-  if (!t.hasBoat) return '<span class="muted">kein Boot</span>';
-  const parts = [];
-  if (t.boatsAtTower) parts.push('<span class="status-pill status-AT_TOWER">⚓ Boot am Turm</span>');
-  if (t.boatsBroken) parts.push('<span class="status-pill status-OUT_OF_SERVICE">⚠ Boot außer Dienst</span>');
-  if (t.boatsAway) parts.push('<span class="status-pill status-PATROL" title="Boot ist nicht am Turm">🚤 Boot unterwegs – nicht am Turm</span>');
-  return `<span class="boat-annotation">${parts.join(' ')}</span>`;
+  const towerBoats = boats.filter(b => b.towerId === t.id);
+  if (!towerBoats.length) return '<span class="muted">kein Boot</span>';
+  const canEdit = isWachfuehrer();
+  const statusKeys = appConfig ? Object.keys(appConfig.boatStatus) : ['AT_TOWER', 'PATROL', 'DEPLOYED', 'OUT_OF_SERVICE'];
+  const lines = towerBoats.map(b => {
+    // „nicht am Turm" = Boot auf Streife/Einsatz (senkt die effektive Sollstärke).
+    const away = b.status === 'PATROL' || b.status === 'DEPLOYED';
+    const warn = away ? ' <span class="status-pill status-PATROL" title="Boot ist nicht am Turm">⚠ nicht am Turm</span>' : '';
+    const statusEl = canEdit
+      ? `<select onchange="setBoatStatus(${b.id}, this.value)" style="width:auto">${statusKeys.map(k =>
+          `<option value="${k}" ${b.status === k ? 'selected' : ''}>${escapeHtml(labelOf('boatStatus', k))}</option>`).join('')}</select>`
+      : statusPill('boatStatus', b.status);
+    return `<span class="boat-line">⛵ ${escapeHtml(b.name)} ${statusEl}${warn}</span>`;
+  });
+  return `<span class="boat-annotation">${lines.join('')}</span>`;
 }
 
 // ── Turm-Verwaltung (Wachführer) ─────────────────────────────
@@ -323,10 +341,12 @@ function renderBoats() {
 
 async function setBoatStatus(id, status) {
   const b = boats.find(x => x.id === id);
-  // Optimistisch: lokalen Status + Karte sofort aktualisieren, dann persistieren.
-  if (b) { b.status = status; scheduleRenderMap(); }
+  // Optimistisch: lokalen Status + Boote-/Türme-Tabelle + Karte sofort aktualisieren,
+  // dann persistieren. Die Türme-Tabelle wird mitgerendert, weil der Boot-Status auch
+  // direkt aus der Boot-Spalte der Türme geändert werden kann (Reaktionszeit).
+  if (b) { b.status = status; renderBoats(); renderTowers(); scheduleRenderMap(); }
   try { await apiPatch('/api/boats/' + id, { status }); showToast('Boot-Status aktualisiert'); }
-  catch (err) { showToast(err.message); refreshBoats(); }
+  catch (err) { showToast(err.message); refreshBoats(); refreshTowers(); }
 }
 
 // Boot einem Turm zuordnen (leerer Wert = kein Turm).

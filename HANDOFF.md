@@ -9,6 +9,18 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Boot-Status direkt aus der Türme-Tabelle ändern)
+- **Wunsch:** Boot-Status soll auch direkt aus dem Türme-Interface änderbar sein → schnellere
+  Reaktionszeiten beim Lagebild.
+- **Frontend (`public/js/views.js`):** Die Boot-Spalte der Türme-Tabelle (`towerBoatAnnotation`)
+  leitet die Boote jetzt aus dem lokalen `boats`-Zustand ab und zeigt dem **Wachführer** pro Boot
+  ein Status-`<select>` (ruft `setBoatStatus`) + Warnung „nicht am Turm"; andere Rollen sehen
+  weiter nur farbige Pillen. `setBoatStatus` rendert nun Boote- **und** Türme-Tabelle optimistisch
+  (vorher nur Karte). `refreshAll` setzt erst alle Zustände, dann rendert es (Boote vor Türmen),
+  weil die Türme-Spalte aus `boats` liest.
+- **CSS (`Turmstatus.html`):** `.boat-annotation` stapelt Boote; neue `.boat-line`.
+- **Backend/Preview unverändert** (bestehender `PATCH /api/boats/:id`). `npm test` → **41/41 grün**.
+
 ## Zuletzt (Boots-abhängige Sollstärke + farbige Boots-Anmerkung im Dashboard)
 - **Wunsch:** Dashboard soll farbig zeigen, wie ein Turm besetzt ist, ob er ein Boot hat und in
   welchem Zustand. Logik: Turm standardmäßig Sollstärke **2**; liegt ein Boot am Turm → **3**
