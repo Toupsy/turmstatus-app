@@ -19,6 +19,24 @@ gespeicherten Koordinaten bleiben unverändert.
 - **Nur Anzeige:** Status-/Owner-Logik, DB-Koordinaten und Backend bleiben unberührt; sobald das
   Boot zurück „Am Turm" gemeldet wird, springt der Marker wieder an die echte Position.
 
+## Reaktionsschnelle Eingaben (optimistische UI + gebündelte Stepper-Writes)
+
+Die App fühlte sich bei Eingaben träge an: Jede Aktion (`+/-`-Stepper für die Ist-Besetzung,
+Boot-Status- und Turm-Zuordnungs-Dropdown) wartete erst auf den PATCH-Roundtrip **und** danach auf
+den vollständigen Refresh-GET, der durch das eigene WebSocket-Broadcast ausgelöst wurde – die
+Anzeige zog also erst nach zwei Roundtrips nach. Schnelles Klicken auf den Stepper feuerte zudem
+pro Klick einen eigenen PATCH (+ jeweils ein Refresh).
+
+- **Optimistische Updates (`views.js`):** Stepper, Boot-Status und Turm-Zuordnung aktualisieren den
+  lokalen Zustand und rendern Tabelle/Karte **sofort**, ohne auf den Server zu warten. Der
+  nachfolgende WS-Refresh gleicht den Zustand verbindlich ab; bei einem Fehler wird per `refresh*`
+  zurückgerollt.
+- **Sofortige Turmfarbe:** `deriveTowerStatusLocal()` spiegelt `server/status.js` im Frontend, damit
+  die Status-Pille beim Stepper unmittelbar mitzieht (nicht erst nach dem Server-Refresh).
+- **Gebündelte Writes:** Mehrere schnelle Stepper-Klicks auf denselben Turm werden zu **einem**
+  PATCH mit dem Endwert zusammengefasst (Debounce 300 ms, `_presentStaffTimers`), statt pro Klick
+  einen Request abzusetzen. Das reduziert Last und Flackern.
+
 ## Manuelle Ist-Besetzung: Wachführer meldet anwesende Wachgänger ohne Accounts
 
 Bisher leitete sich die Ist-Besetzung eines Turms (und damit die Turmfarbe) ausschließlich aus
