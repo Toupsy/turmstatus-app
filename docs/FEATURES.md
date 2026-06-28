@@ -2,6 +2,21 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Karten-Popup bleibt beim +1/-1 der Ist-Besetzung offen
+
+Beim Anpassen der anwesenden Wachgänger (`+`/`−`-Stepper) **im Karten-Popup** eines Turms schloss
+sich das Popup sofort wieder: Der Stepper löst über `scheduleRenderMap()` ein Neuzeichnen der Karte
+aus, und `renderMap()` entfernt zu Beginn per `_markerLayer.clearLayers()` alle Marker (samt offener
+Popups). Der Marker mit dem offenen Popup wurde neu erzeugt, das Popup blieb aber zu – der Nutzer
+musste für jeden Klick erneut auf den Turm tippen.
+
+- **Umsetzung** (`public/js/map.js` + `state.js`): Eine neue Zustands­variable `_openTowerPopupId`
+  merkt sich über `popupopen`/`popupclose`-Listener (`_trackTowerPopup()`), welcher Turm gerade ein
+  offenes Popup hat. `renderMap()` sichert diese ID **vor** `clearLayers()` (das sonst via
+  `popupclose` die ID auf `null` setzt) und öffnet das Popup des entsprechenden neu erzeugten
+  Markers nach dem Re-Render wieder (`marker.openPopup()`).
+- **Effekt:** Mehrere `+`/`−`-Klicks hintereinander sind möglich, ohne das Popup neu öffnen zu
+  müssen; der angezeigte Besetzungs-Wert/-Status zieht durch das Re-Render unmittelbar mit.
 ## Boot direkt aus der Einsatzkarte auf Streife setzen
 
 Bisher konnte ein Boot nur über das Status-Dropdown in der Boot-Tabelle auf **Streife** (`PATROL`)
