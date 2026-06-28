@@ -1,6 +1,6 @@
 {
   "name": "turmstatus-app",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "Turmstatus – digitales Wach- und Statussystem für Wasserrettung (Express + SQLite + Vanilla JS)",
   "main": "server/server.js",
   "scripts": {
