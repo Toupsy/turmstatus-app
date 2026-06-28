@@ -194,14 +194,27 @@ function scheduleRenderMap() {
   else setTimeout(run, 0);
 }
 
+// Merkt sich, welcher Turm gerade ein offenes Karten-Popup hat, damit ein durch
+// +1/-1 ausgelöstes Re-Render (clearLayers schließt alle Popups) es wieder öffnet.
+function _trackTowerPopup(marker, towerId) {
+  marker.on('popupopen', () => { _openTowerPopupId = towerId; });
+  marker.on('popupclose', () => { if (_openTowerPopupId === towerId) _openTowerPopupId = null; });
+}
+
 function renderMap() {
   if (!_map) return;
+  // ID des offenen Turm-Popups sichern: clearLayers() feuert popupclose und würde
+  // _openTowerPopupId sonst auf null setzen, bevor wir das Popup wieder öffnen können.
+  const previouslyOpenTowerId = _openTowerPopupId;
   _markerLayer.clearLayers();
 
   // Türme: für den Wachführer als verschiebbare Marker (Positionieren), sonst als
   // farbcodierte Marker (reine Anzeige). Türme mit zugeordnetem Boot erhalten
   // einen Badge + goldene Hervorhebung, damit sie sofort anders erkennbar sind.
   const canEditTowers = typeof isWachfuehrer === 'function' && isWachfuehrer();
+  // Beim +1/-1 im Popup wird die Karte neu gerendert (clearLayers schließt alle Popups).
+  // Wir merken pro Turm-Marker, ob sein Popup offen ist, und öffnen es danach erneut.
+  let reopenTowerMarker = null;
   towers.forEach(t => {
     if (t.latitude == null || t.longitude == null) return;
     const hasBoat = _towerHasBoat(t.id);
@@ -223,13 +236,17 @@ function renderMap() {
         const ll = ev.target.getLatLng();
         moveTower(t.id, ll.lat, ll.lng);
       });
+      _trackTowerPopup(marker, t.id);
       marker.bindPopup(popup).addTo(_markerLayer);
+      if (previouslyOpenTowerId === t.id) reopenTowerMarker = marker;
     } else {
-      L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) })
-        .bindPopup(popup)
-        .addTo(_markerLayer);
+      const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) });
+      _trackTowerPopup(marker, t.id);
+      marker.bindPopup(popup).addTo(_markerLayer);
+      if (previouslyOpenTowerId === t.id) reopenTowerMarker = marker;
     }
   });
+  if (reopenTowerMarker) reopenTowerMarker.openPopup();
 
   // Wachgänger
   guards.forEach(g => {
