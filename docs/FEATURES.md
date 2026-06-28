@@ -14,6 +14,34 @@ und war erst nach einem Klick sichtbar – Türme waren dadurch auf einen Blick 
   dunkle Plakette, heller fetter Text mit Textschatten; der Turmstatus erscheint als farbiger
   Akzentstreifen am linken Rand (GREEN/YELLOW/RED/UNKNOWN).
 - **Nur Anzeige:** Keine Backend-/Datenmodell-Änderung; das Label nutzt vorhandene Turmdaten.
+## Karten-Popup bleibt beim +1/-1 der Ist-Besetzung offen
+
+Beim Anpassen der anwesenden Wachgänger (`+`/`−`-Stepper) **im Karten-Popup** eines Turms schloss
+sich das Popup sofort wieder: Der Stepper löst über `scheduleRenderMap()` ein Neuzeichnen der Karte
+aus, und `renderMap()` entfernt zu Beginn per `_markerLayer.clearLayers()` alle Marker (samt offener
+Popups). Der Marker mit dem offenen Popup wurde neu erzeugt, das Popup blieb aber zu – der Nutzer
+musste für jeden Klick erneut auf den Turm tippen.
+
+- **Umsetzung** (`public/js/map.js` + `state.js`): Eine neue Zustands­variable `_openTowerPopupId`
+  merkt sich über `popupopen`/`popupclose`-Listener (`_trackTowerPopup()`), welcher Turm gerade ein
+  offenes Popup hat. `renderMap()` sichert diese ID **vor** `clearLayers()` (das sonst via
+  `popupclose` die ID auf `null` setzt) und öffnet das Popup des entsprechenden neu erzeugten
+  Markers nach dem Re-Render wieder (`marker.openPopup()`).
+- **Effekt:** Mehrere `+`/`−`-Klicks hintereinander sind möglich, ohne das Popup neu öffnen zu
+  müssen; der angezeigte Besetzungs-Wert/-Status zieht durch das Re-Render unmittelbar mit.
+## Boot direkt aus der Einsatzkarte auf Streife setzen
+
+Bisher konnte ein Boot nur über das Status-Dropdown in der Boot-Tabelle auf **Streife** (`PATROL`)
+gesetzt werden. Im Lagebild fehlte der direkte Zugriff. Das Boot-Popup auf der Einsatzkarte
+(`public/js/map.js`, `renderMap()`) zeigt dem **Wachführer** jetzt einen Knopf:
+
+- **„🚤 Auf Streife setzen"** wenn das Boot nicht auf Streife ist → `setBoatStatus(id, 'PATROL')`.
+- **„⚓ Zurück zum Turm"** wenn es bereits auf Streife ist → `setBoatStatus(id, 'AT_TOWER')`.
+
+Der Knopf ist nur für Wachführer sichtbar (`isWachfuehrer()`); Admin/Wachgänger sehen weiterhin nur
+die Anzeige. Genutzt wird das vorhandene `setBoatStatus()` (optimistisches Update → Marker springt
+sofort seewärts/zurück, dann PATCH `/api/boats/:id` + Broadcast → alle Clients live). Owner-Scope
+und Statuslogik bleiben unverändert (Backend prüft `requireWachfuehrer` + eigenes Boot).
 
 ## Boote auf Streife seewärts versetzt darstellen
 

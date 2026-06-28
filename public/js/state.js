@@ -22,6 +22,7 @@ let _map = null;
 let _markerLayer = null;
 let _addTowerMode = false;   // true: nächster Karten-Klick legt einen Turm an (Wachführer)
 let _renderMapScheduled = false; // bündelt mehrere Daten-Refreshes in ein Karten-Rendern
+let _openTowerPopupId = null; // Turm-ID mit offenem Karten-Popup → nach renderMap erneut öffnen (+1/-1 schließt sonst das Popup)
 
 // Demo-Konfigurations-Karte (Admin positioniert Vorlagen-Türme/-Boote)
 let _templateMap = null;

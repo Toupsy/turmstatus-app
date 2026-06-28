@@ -212,14 +212,27 @@ function scheduleRenderMap() {
   else setTimeout(run, 0);
 }
 
+// Merkt sich, welcher Turm gerade ein offenes Karten-Popup hat, damit ein durch
+// +1/-1 ausgelöstes Re-Render (clearLayers schließt alle Popups) es wieder öffnet.
+function _trackTowerPopup(marker, towerId) {
+  marker.on('popupopen', () => { _openTowerPopupId = towerId; });
+  marker.on('popupclose', () => { if (_openTowerPopupId === towerId) _openTowerPopupId = null; });
+}
+
 function renderMap() {
   if (!_map) return;
+  // ID des offenen Turm-Popups sichern: clearLayers() feuert popupclose und würde
+  // _openTowerPopupId sonst auf null setzen, bevor wir das Popup wieder öffnen können.
+  const previouslyOpenTowerId = _openTowerPopupId;
   _markerLayer.clearLayers();
 
   // Türme: für den Wachführer als verschiebbare Marker (Positionieren), sonst als
   // farbcodierte Marker (reine Anzeige). Türme mit zugeordnetem Boot erhalten
   // einen Badge + goldene Hervorhebung, damit sie sofort anders erkennbar sind.
   const canEditTowers = typeof isWachfuehrer === 'function' && isWachfuehrer();
+  // Beim +1/-1 im Popup wird die Karte neu gerendert (clearLayers schließt alle Popups).
+  // Wir merken pro Turm-Marker, ob sein Popup offen ist, und öffnen es danach erneut.
+  let reopenTowerMarker = null;
   towers.forEach(t => {
     if (t.latitude == null || t.longitude == null) return;
     const hasBoat = _towerHasBoat(t.id);
@@ -242,13 +255,18 @@ function renderMap() {
         moveTower(t.id, ll.lat, ll.lng);
       });
       _bindTowerLabel(marker, t);
+      _trackTowerPopup(marker, t.id);
       marker.bindPopup(popup).addTo(_markerLayer);
+      if (previouslyOpenTowerId === t.id) reopenTowerMarker = marker;
     } else {
       const marker = L.marker([t.latitude, t.longitude], { icon: _towerIcon(t.status, hasBoat) });
       _bindTowerLabel(marker, t);
+      _trackTowerPopup(marker, t.id);
       marker.bindPopup(popup).addTo(_markerLayer);
+      if (previouslyOpenTowerId === t.id) reopenTowerMarker = marker;
     }
   });
+  if (reopenTowerMarker) reopenTowerMarker.openPopup();
 
   // Wachgänger
   guards.forEach(g => {
@@ -260,14 +278,24 @@ function renderMap() {
   });
 
   // Boote – auf Streife seewärts versetzt gezeichnet (siehe _boatDisplayLatLng).
+  // Der Wachführer kann ein Boot direkt aus dem Popup auf Streife setzen bzw.
+  // zurück zum Turm holen (setBoatStatus → optimistisches Update + PATCH + Broadcast).
+  const canEditBoats = typeof isWachfuehrer === 'function' && isWachfuehrer();
   boats.forEach(b => {
     if (b.latitude == null || b.longitude == null) return;
     const onPatrol = b.status === 'PATROL';
     const offsetM = typeof _mapConfig().patrolOffsetMeters === 'number' ? _mapConfig().patrolOffsetMeters : 150;
+    let popup = `<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
+      escapeHtml(labelOf('boatStatus', b.status)) +
+      (onPatrol ? `<br><span style="color:#888;font-size:.85em">Position ~${offsetM} m seewärts (Streife)</span>` : '');
+    if (canEditBoats) {
+      popup += `<div style="margin-top:6px;display:flex;gap:6px">` + (onPatrol
+        ? `<button onclick="setBoatStatus(${b.id}, 'AT_TOWER')">⚓ Zurück zum Turm</button>`
+        : `<button onclick="setBoatStatus(${b.id}, 'PATROL')">🚤 Auf Streife setzen</button>`) +
+        `</div>`;
+    }
     L.marker(_boatDisplayLatLng(b), { icon: _boatIcon(b.status) })
-      .bindPopup(`<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
-        escapeHtml(labelOf('boatStatus', b.status)) +
-        (onPatrol ? `<br><span style="color:#888;font-size:.85em">Position ~${offsetM} m seewärts (Streife)</span>` : ''))
+      .bindPopup(popup)
       .addTo(_markerLayer);
   });
 }
