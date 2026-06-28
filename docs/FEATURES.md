@@ -2,6 +2,18 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Türme mit dauerhaftem, lesbarem Namens-Label auf der Karte
+
+Bisher zeigte ein Turm auf der Karte nur ein 🛟-Symbol; der **Name** stand ausschließlich im Popup
+und war erst nach einem Klick sichtbar – Türme waren dadurch auf einen Blick kaum auseinanderzuhalten.
+
+- **Dauerhaftes Label** (`public/js/map.js`, `_bindTowerLabel()`): Jeder Turm-Marker (sowohl die
+  verschiebbaren Wachführer-Marker als auch die reinen Anzeige-Marker) bindet jetzt einen
+  **permanenten Leaflet-Tooltip** mit Turmname + ggf. Funkrufname unterhalb des Pins.
+- **Gut lesbar/hoher Kontrast** (CSS in `public/Turmstatus.html`, `.leaflet-tooltip.tower-label`):
+  dunkle Plakette, heller fetter Text mit Textschatten; der Turmstatus erscheint als farbiger
+  Akzentstreifen am linken Rand (GREEN/YELLOW/RED/UNKNOWN).
+- **Nur Anzeige:** Keine Backend-/Datenmodell-Änderung; das Label nutzt vorhandene Turmdaten.
 ## Karten-Popup bleibt beim +1/-1 der Ist-Besetzung offen
 
 Beim Anpassen der anwesenden Wachgänger (`+`/`−`-Stepper) **im Karten-Popup** eines Turms schloss
