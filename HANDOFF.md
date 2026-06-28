@@ -9,6 +9,17 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Reaktionsschnelle Eingaben – optimistische UI)
+- **Problem:** App reagierte träge – jede Eingabe wartete auf PATCH-Roundtrip **plus** den
+  vollständigen Refresh-GET (ausgelöst vom eigenen WS-Broadcast); Stepper feuerte pro Klick.
+- **Lösung (`views.js`):** Optimistische Updates für Ist-Besetzungs-Stepper (`adjustTowerPresent`),
+  Boot-Status (`setBoatStatus`) und Turm-Zuordnung (`setBoatTower`) → lokaler Zustand + Tabelle/Karte
+  rendern sofort, der WS-Refresh gleicht danach verbindlich ab (Fehler → revert via `refresh*`).
+- **Sofortige Turmfarbe:** `deriveTowerStatusLocal()` spiegelt `server/status.js` im Frontend.
+- **Gebündelte Stepper-Writes:** schnelle Klicke auf denselben Turm → **ein** PATCH mit Endwert
+  (Debounce 300 ms, `_presentStaffTimers`). Kein neuer Test nötig (reines Frontend-Verhalten);
+  `node --check` der geänderten JS ist grün.
+
 ## Zuletzt (Manuelle Ist-Besetzung: WF meldet anwesende WG ohne Accounts)
 - **Problem/Wunsch:** Der Wachführer soll selbst sagen können, wie viele Wachgänger aktuell
   anwesend sind – ohne dass für jeden WG ein Konto/Guard-Objekt angelegt werden muss.
