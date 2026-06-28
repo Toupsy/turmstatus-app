@@ -13,8 +13,11 @@ function _handleEvent(type) {
   switch (type) {
     case 'towers-updated': refreshTowers(); refreshDashboard(); break;
     case 'guards-updated': refreshGuards(); refreshTowers(); refreshDashboard(); break;
-    case 'boats-updated': refreshBoats(); refreshDashboard(); break;
-    case 'requests-updated': refreshRequests(); refreshGuards(); refreshDashboard(); break;
+    // Boots-Status fließt in die effektive Sollstärke/Turmfarbe ein → Türme mitladen.
+    case 'boats-updated': refreshBoats(); refreshTowers(); refreshDashboard(); break;
+    // Ein genehmigtes/zurückgemeldetes -1 ändert den Wachgänger-Status und damit
+    // die Ist-Besetzung der Türme → Türme mitladen.
+    case 'requests-updated': refreshRequests(); refreshGuards(); refreshTowers(); refreshDashboard(); break;
     case 'control-trips-updated': refreshControlTrips(); break;
     case 'users-updated': if (canManage() || canManageTeam()) refreshAdmin(); break;
     default: break;
