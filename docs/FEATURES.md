@@ -17,6 +17,19 @@ musste für jeden Klick erneut auf den Turm tippen.
   Markers nach dem Re-Render wieder (`marker.openPopup()`).
 - **Effekt:** Mehrere `+`/`−`-Klicks hintereinander sind möglich, ohne das Popup neu öffnen zu
   müssen; der angezeigte Besetzungs-Wert/-Status zieht durch das Re-Render unmittelbar mit.
+## Boot direkt aus der Einsatzkarte auf Streife setzen
+
+Bisher konnte ein Boot nur über das Status-Dropdown in der Boot-Tabelle auf **Streife** (`PATROL`)
+gesetzt werden. Im Lagebild fehlte der direkte Zugriff. Das Boot-Popup auf der Einsatzkarte
+(`public/js/map.js`, `renderMap()`) zeigt dem **Wachführer** jetzt einen Knopf:
+
+- **„🚤 Auf Streife setzen"** wenn das Boot nicht auf Streife ist → `setBoatStatus(id, 'PATROL')`.
+- **„⚓ Zurück zum Turm"** wenn es bereits auf Streife ist → `setBoatStatus(id, 'AT_TOWER')`.
+
+Der Knopf ist nur für Wachführer sichtbar (`isWachfuehrer()`); Admin/Wachgänger sehen weiterhin nur
+die Anzeige. Genutzt wird das vorhandene `setBoatStatus()` (optimistisches Update → Marker springt
+sofort seewärts/zurück, dann PATCH `/api/boats/:id` + Broadcast → alle Clients live). Owner-Scope
+und Statuslogik bleiben unverändert (Backend prüft `requireWachfuehrer` + eigenes Boot).
 
 ## Boote auf Streife seewärts versetzt darstellen
 
