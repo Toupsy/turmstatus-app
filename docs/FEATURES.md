@@ -2,6 +2,20 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Boot direkt aus der Einsatzkarte auf Streife setzen
+
+Bisher konnte ein Boot nur über das Status-Dropdown in der Boot-Tabelle auf **Streife** (`PATROL`)
+gesetzt werden. Im Lagebild fehlte der direkte Zugriff. Das Boot-Popup auf der Einsatzkarte
+(`public/js/map.js`, `renderMap()`) zeigt dem **Wachführer** jetzt einen Knopf:
+
+- **„🚤 Auf Streife setzen"** wenn das Boot nicht auf Streife ist → `setBoatStatus(id, 'PATROL')`.
+- **„⚓ Zurück zum Turm"** wenn es bereits auf Streife ist → `setBoatStatus(id, 'AT_TOWER')`.
+
+Der Knopf ist nur für Wachführer sichtbar (`isWachfuehrer()`); Admin/Wachgänger sehen weiterhin nur
+die Anzeige. Genutzt wird das vorhandene `setBoatStatus()` (optimistisches Update → Marker springt
+sofort seewärts/zurück, dann PATCH `/api/boats/:id` + Broadcast → alle Clients live). Owner-Scope
+und Statuslogik bleiben unverändert (Backend prüft `requireWachfuehrer` + eigenes Boot).
+
 ## Boote auf Streife seewärts versetzt darstellen
 
 Die Türme (und damit die am Turm liegenden Boote) stehen am Strand. Ein Boot auf **Streife**
