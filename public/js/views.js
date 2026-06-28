@@ -107,26 +107,43 @@ function renderTowers() {
     const actions = canEdit
       ? `<button onclick="openTowerById(${t.id})">Bearbeiten</button>
          <button class="danger" onclick="deleteTower(${t.id})">Löschen</button>` : '';
+    // Effektive Sollstärke inkl. Boots-Logik (Boot am Turm → +1 BF); Fallback = Basis-Soll.
+    const required = t.effectiveRequiredStaff != null ? t.effectiveRequiredStaff : t.requiredStaff;
     // Wachführer kann die anwesenden Wachgänger direkt per +/- melden (ohne Accounts).
     const staffCell = canEdit
-      ? `${t.currentStaff}/${t.requiredStaff}
+      ? `${t.currentStaff}/${required}
          <span class="present-stepper" title="Anwesende Wachgänger melden">
            <button onclick="adjustTowerPresent(${t.id}, -1)" ${t.presentStaff <= 0 ? 'disabled' : ''}>−</button>
            <span>${t.presentStaff}</span>
            <button onclick="adjustTowerPresent(${t.id}, 1)">+</button>
          </span>`
-      : `${t.currentStaff}/${t.requiredStaff}`;
+      : `${t.currentStaff}/${required}`;
     return `
     <tr>
       <td>${escapeHtml(t.name)}</td>
       <td>${escapeHtml(t.callSign || '–')}</td>
       <td>${staffCell}</td>
       <td>${statusPill('towerStatus', t.status)}</td>
+      <td>${towerBoatAnnotation(t)}</td>
       <td>${pos}</td>
       ${canEdit ? `<td class="row-actions">${actions}</td>` : ''}
     </tr>`; }).join('');
   document.getElementById('tower-table').innerHTML =
-    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Besetzung</th><th>Status</th><th>Position</th>${canEdit ? '<th>Aktion</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
+    `<table><thead><tr><th>Turm</th><th>Funk</th><th>Besetzung</th><th>Status</th><th>Boot</th><th>Position</th>${canEdit ? '<th>Aktion</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// Visuelle, farbcodierte Boots-Anmerkung eines Turms für die Lageübersicht:
+//   kein Boot          → neutral
+//   Boot am Turm       → grün  (Sollstärke +1 Bootsführer)
+//   Boot außer Dienst  → rot   (defekt → wie normaler Turm behandelt)
+//   Boot unterwegs     → gelb + Warnung „nicht am Turm" (Streife/Einsatz)
+function towerBoatAnnotation(t) {
+  if (!t.hasBoat) return '<span class="muted">kein Boot</span>';
+  const parts = [];
+  if (t.boatsAtTower) parts.push('<span class="status-pill status-AT_TOWER">⚓ Boot am Turm</span>');
+  if (t.boatsBroken) parts.push('<span class="status-pill status-OUT_OF_SERVICE">⚠ Boot außer Dienst</span>');
+  if (t.boatsAway) parts.push('<span class="status-pill status-PATROL" title="Boot ist nicht am Turm">🚤 Boot unterwegs – nicht am Turm</span>');
+  return `<span class="boat-annotation">${parts.join(' ')}</span>`;
 }
 
 // ── Turm-Verwaltung (Wachführer) ─────────────────────────────
@@ -217,7 +234,8 @@ function adjustTowerPresent(id, delta) {
   // Optimistisches Update von Ist-Besetzung, effektiver Stärke und abgeleiteter Farbe.
   t.presentStaff = next;
   if (typeof t.currentStaff === 'number') t.currentStaff += (next - prev);
-  t.status = deriveTowerStatusLocal(t.currentStaff, t.requiredStaff);
+  // Farbe gegen die effektive Sollstärke (inkl. Boots-Logik) ableiten.
+  t.status = deriveTowerStatusLocal(t.currentStaff, t.effectiveRequiredStaff != null ? t.effectiveRequiredStaff : t.requiredStaff);
   renderTowers();
   scheduleRenderMap();
   // PATCH bündeln: erst senden, wenn der Nutzer kurz nicht mehr klickt.

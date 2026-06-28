@@ -2,6 +2,30 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Boots-abhängige Sollstärke + farbige Boots-Anmerkung im Dashboard
+
+Die Sollstärke eines Turms hängt jetzt vom **Boots-Status** ab, und das Dashboard zeigt die
+Boots-Lage als farbige Anmerkung an.
+
+- **Logik (`server/status.js`, rein/testbar):** Jeder Turm hat eine **Basis-Sollstärke**
+  (Standard **2**). Pro zugeordnetem Boot kommt ein Beitrag hinzu (`boatStaffDelta`):
+  - **Boot am Turm** (`AT_TOWER`) → **+1** Bootsführer ⇒ Sollstärke **3** (2 WF + 1 BF).
+  - **Boot außer Dienst** (`OUT_OF_SERVICE`) → **±0** ⇒ wie normaler Turm (**2**).
+  - **Boot auf Streife / im Einsatz** (`PATROL`/`DEPLOYED`) → **−1** ⇒ Sollstärke **1** + Warnung
+    „Boot nicht am Turm".
+  - `effectiveRequiredStaff(base, boatStatuses[])` summiert die Beiträge (min. 1);
+    `summarizeBoats()` liefert Lage + Warn-Flag.
+- **API (`server/api/towers.js`):** `GET /api/towers` liefert je Turm neu
+  `effectiveRequiredStaff`, `hasBoat`, `boatsAtTower`, `boatsAway`, `boatsBroken`, `boatWarning`;
+  `status` (Farbe) wird gegen die **effektive** Sollstärke berechnet. `requiredStaff` bleibt die
+  editierbare Basis-Sollstärke.
+- **Dashboard (`public/js/views.js`):** neue Spalte **„Boot"** mit farbcodierten Pillen
+  (grün = am Turm, rot = außer Dienst, gelb = unterwegs inkl. Warnung); Besetzung wird gegen die
+  effektive Sollstärke angezeigt. Karten-Popup (`map.js`) zeigt ebenfalls effektive Sollstärke +
+  „⚠ Boot nicht am Turm".
+- **Preview-Mock (`public/js/preview.js`)** spiegelt die Logik; Demo-Datensatz zeigt alle Fälle
+  (Boot am Turm, auf Streife, außer Dienst).
+- **Tests:** `test/status.test.js` deckt `boatStaffDelta`/`effectiveRequiredStaff`/`summarizeBoats` ab.
 ## Türme mit dauerhaftem, lesbarem Namens-Label auf der Karte
 
 Bisher zeigte ein Turm auf der Karte nur ein 🛟-Symbol; der **Name** stand ausschließlich im Popup

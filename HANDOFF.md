@@ -9,6 +9,24 @@ FastAPI/PostgreSQL/React auf den Stack des **DLRG-Wachplan-Generators** umgestel
 GHCR-Multi-Arch-Image + Semantic Release. Infrastruktur (db/, session, crypto, ids,
 auth) ist absichtlich deckungsgleich zum Schwester-Projekt → spätere Zusammenführung möglich.
 
+## Zuletzt (Boots-abhängige Sollstärke + farbige Boots-Anmerkung im Dashboard)
+- **Wunsch:** Dashboard soll farbig zeigen, wie ein Turm besetzt ist, ob er ein Boot hat und in
+  welchem Zustand. Logik: Turm standardmäßig Sollstärke **2**; liegt ein Boot am Turm → **3**
+  (2 WF + 1 BF); Boot **außer Dienst** → **2** (wie normal); Boot **auf Streife/Einsatz** → **1**
+  mit Warnung „Boot nicht am Turm".
+- **Backend:** `server/status.js` neu `boatStaffDelta`/`effectiveRequiredStaff`/`summarizeBoats`
+  (rein/testbar). `api/towers.js` GET sammelt Boots-Status je Turm und liefert
+  `effectiveRequiredStaff` + Boots-Lage (`hasBoat`/`boatsAtTower`/`boatsAway`/`boatsBroken`/
+  `boatWarning`); Turmfarbe wird gegen die effektive Sollstärke berechnet. `requiredStaff` bleibt
+  die editierbare Basis.
+- **Frontend:** `views.js` – neue Spalte **„Boot"** mit farbcodierten Pillen (grün/rot/gelb +
+  Warnung), Besetzung gegen effektive Sollstärke; optimistischer Stepper nutzt effektive Soll.
+  `map.js`-Popup zeigt effektive Soll + „⚠ Boot nicht am Turm". `preview.js` spiegelt die Logik
+  (+ Demo-Boot „außer Dienst", damit alle Fälle sichtbar sind). CSS `.boat-annotation`.
+- **Tests:** `test/status.test.js` um Boots-Logik erweitert → 11/11 grün (`node --test
+  test/status.test.js`). `api.test.js` bootet in dieser Sandbox weiterhin nicht (Server-Timeout),
+  unverändert zur dokumentierten Limitierung.
+
 ## Zuletzt (Reaktionsschnelle Eingaben – optimistische UI)
 - **Problem:** App reagierte träge – jede Eingabe wartete auf PATCH-Roundtrip **plus** den
   vollständigen Refresh-GET (ausgelöst vom eigenen WS-Broadcast); Stepper feuerte pro Klick.
