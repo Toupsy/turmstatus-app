@@ -241,14 +241,24 @@ function renderMap() {
   });
 
   // Boote – auf Streife seewärts versetzt gezeichnet (siehe _boatDisplayLatLng).
+  // Der Wachführer kann ein Boot direkt aus dem Popup auf Streife setzen bzw.
+  // zurück zum Turm holen (setBoatStatus → optimistisches Update + PATCH + Broadcast).
+  const canEditBoats = typeof isWachfuehrer === 'function' && isWachfuehrer();
   boats.forEach(b => {
     if (b.latitude == null || b.longitude == null) return;
     const onPatrol = b.status === 'PATROL';
     const offsetM = typeof _mapConfig().patrolOffsetMeters === 'number' ? _mapConfig().patrolOffsetMeters : 150;
+    let popup = `<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
+      escapeHtml(labelOf('boatStatus', b.status)) +
+      (onPatrol ? `<br><span style="color:#888;font-size:.85em">Position ~${offsetM} m seewärts (Streife)</span>` : '');
+    if (canEditBoats) {
+      popup += `<div style="margin-top:6px;display:flex;gap:6px">` + (onPatrol
+        ? `<button onclick="setBoatStatus(${b.id}, 'AT_TOWER')">⚓ Zurück zum Turm</button>`
+        : `<button onclick="setBoatStatus(${b.id}, 'PATROL')">🚤 Auf Streife setzen</button>`) +
+        `</div>`;
+    }
     L.marker(_boatDisplayLatLng(b), { icon: _boatIcon(b.status) })
-      .bindPopup(`<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
-        escapeHtml(labelOf('boatStatus', b.status)) +
-        (onPatrol ? `<br><span style="color:#888;font-size:.85em">Position ~${offsetM} m seewärts (Streife)</span>` : ''))
+      .bindPopup(popup)
       .addTo(_markerLayer);
   });
 }
