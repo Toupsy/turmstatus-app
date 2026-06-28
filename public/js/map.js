@@ -14,6 +14,28 @@ function _configuredMapBounds() {
   return L.latLngBounds(bounds[0], bounds[1]);
 }
 
+// Versetzt eine Position um `distanceM` Meter in Richtung `bearingDeg` (Grad im
+// Uhrzeigersinn von Nord; 90 = Osten). Equirectangulare Näherung – für wenige
+// hundert Meter völlig ausreichend.
+function _offsetLatLng(lat, lng, distanceM, bearingDeg) {
+  const rad = (bearingDeg * Math.PI) / 180;
+  const dLat = (distanceM * Math.cos(rad)) / 111320;
+  const dLng = (distanceM * Math.sin(rad)) / (111320 * Math.cos((lat * Math.PI) / 180));
+  return [lat + dLat, lng + dLng];
+}
+
+// Boote auf Streife (PATROL) liegen real auf dem Wasser, ihre gespeicherte
+// Position ist aber meist die Strand-/Turmposition. Daher zeichnen wir sie auf
+// der Karte um `patrolOffsetMeters` (Default 150 m) in Richtung See (`seaBearing`,
+// Default Osten) versetzt – rein visuell, die DB-Koordinaten bleiben unberührt.
+function _boatDisplayLatLng(boat) {
+  if (boat.status !== 'PATROL') return [boat.latitude, boat.longitude];
+  const cfg = _mapConfig();
+  const distance = typeof cfg.patrolOffsetMeters === 'number' ? cfg.patrolOffsetMeters : 150;
+  const bearing = typeof cfg.seaBearing === 'number' ? cfg.seaBearing : 90;
+  return _offsetLatLng(boat.latitude, boat.longitude, distance, bearing);
+}
+
 function initMap() {
   if (_map) return;
   // Fallback-Zentrum: DLRG Hauptwache Dahme (Strandpromenade), falls /api/config fehlt.
@@ -218,12 +240,15 @@ function renderMap() {
       .addTo(_markerLayer);
   });
 
-  // Boote
+  // Boote – auf Streife seewärts versetzt gezeichnet (siehe _boatDisplayLatLng).
   boats.forEach(b => {
     if (b.latitude == null || b.longitude == null) return;
-    L.marker([b.latitude, b.longitude], { icon: _boatIcon(b.status) })
+    const onPatrol = b.status === 'PATROL';
+    const offsetM = typeof _mapConfig().patrolOffsetMeters === 'number' ? _mapConfig().patrolOffsetMeters : 150;
+    L.marker(_boatDisplayLatLng(b), { icon: _boatIcon(b.status) })
       .bindPopup(`<b>⛵ ${escapeHtml(b.name)}</b> ${b.callSign ? '(' + escapeHtml(b.callSign) + ')' : ''}<br>` +
-        escapeHtml(labelOf('boatStatus', b.status)))
+        escapeHtml(labelOf('boatStatus', b.status)) +
+        (onPatrol ? `<br><span style="color:#888;font-size:.85em">Position ~${offsetM} m seewärts (Streife)</span>` : ''))
       .addTo(_markerLayer);
   });
 }

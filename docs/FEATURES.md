@@ -2,6 +2,23 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Boote auf Streife seewärts versetzt darstellen
+
+Die Türme (und damit die am Turm liegenden Boote) stehen am Strand. Ein Boot auf **Streife**
+(`status = PATROL`) liegt real aber auf dem Wasser, während seine gespeicherte Position weiterhin
+die Strand-/Turmposition ist. Damit das Lagebild realistisch wirkt, wird ein Streifen-Boot auf der
+Karte jetzt **rein visuell** um ~150 m in Richtung See versetzt gezeichnet – die in der DB
+gespeicherten Koordinaten bleiben unverändert.
+
+- **Konfigurierbar** in `server/config.json` → `map.seaBearing` (Richtung See in Grad, im
+  Uhrzeigersinn von Nord; Default `90` = Osten, passend zur Ostsee-Küste bei Dahme) und
+  `map.patrolOffsetMeters` (Versatz in Metern, Default `150`).
+- **Umsetzung** (`public/js/map.js`): `_offsetLatLng()` (equirectangulare Näherung) +
+  `_boatDisplayLatLng()` – greift nur bei `status === 'PATROL'`, sonst wird die echte Position
+  genutzt. Das Popup weist auf den Versatz hin („Position ~150 m seewärts (Streife)").
+- **Nur Anzeige:** Status-/Owner-Logik, DB-Koordinaten und Backend bleiben unberührt; sobald das
+  Boot zurück „Am Turm" gemeldet wird, springt der Marker wieder an die echte Position.
+
 ## Manuelle Ist-Besetzung: Wachführer meldet anwesende Wachgänger ohne Accounts
 
 Bisher leitete sich die Ist-Besetzung eines Turms (und damit die Turmfarbe) ausschließlich aus
