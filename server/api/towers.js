@@ -14,7 +14,7 @@ const { parsePositiveInt } = require('../db/ids');
 const { requireAuth, requireWachfuehrer, viewScope } = require('../middleware');
 const { recordAudit } = require('../db/audit');
 const { broadcast } = require('../realtime');
-const { deriveTowerStatus } = require('../status');
+const { deriveTowerStatus, effectiveRequiredStaff, summarizeBoats } = require('../status');
 
 const MAX_NAME_LEN = 120;
 const MAX_STAFF = 99;
@@ -50,6 +50,13 @@ router.get('/', async (req, res) => {
       "SELECT tower_id, COUNT(*) AS n FROM guards WHERE status = 'IN_AREA' AND tower_id IS NOT NULL GROUP BY tower_id"
     );
     const byTower = Object.fromEntries(counts.map(c => [c.tower_id, c.n]));
+    // Boots-Status je Turm einsammeln: bestimmt die effektive Sollstärke
+    // (Boot am Turm → +1 Bootsführer; Boot unterwegs → −1; Boot defekt → wie normal).
+    const boatRows = await dbAll(
+      'SELECT tower_id, status FROM boats WHERE tower_id IS NOT NULL'
+    );
+    const boatsByTower = {};
+    for (const b of boatRows) (boatsByTower[b.tower_id] ||= []).push(b.status);
     res.json({
       towers: towers.map(t => {
         // Effektive Ist-Besetzung = gezählte IN_AREA-Wachgänger (mit Account/Objekt)
@@ -57,18 +64,28 @@ router.get('/', async (req, res) => {
         const guardStaff = byTower[t.id] || 0;
         const presentStaff = t.present_staff || 0;
         const current = guardStaff + presentStaff;
+        const boatStatuses = boatsByTower[t.id] || [];
+        const required = effectiveRequiredStaff(t.required_staff, boatStatuses);
+        const boats = summarizeBoats(boatStatuses);
         return {
           id: t.id,
           name: t.name,
           callSign: t.call_sign,
           latitude: t.latitude,
           longitude: t.longitude,
-          requiredStaff: t.required_staff,
+          requiredStaff: t.required_staff,         // gespeicherte Basis-Sollstärke (editierbar)
+          effectiveRequiredStaff: required,        // inkl. Boots-Logik (für Farbe/Anzeige)
           presentStaff,
           guardStaff,
           ownerId: t.owner_id,
           currentStaff: current,
-          status: deriveTowerStatus(current, t.required_staff)
+          // Boots-Lage des Turms für die visuelle Dashboard-Anmerkung
+          hasBoat: boats.hasBoat,
+          boatsAtTower: boats.atTower,
+          boatsAway: boats.away,
+          boatsBroken: boats.broken,
+          boatWarning: boats.warning,              // Boot unterwegs → nicht am Turm
+          status: deriveTowerStatus(current, required)
         };
       })
     });

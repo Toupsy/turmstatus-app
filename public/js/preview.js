@@ -57,8 +57,9 @@ const _db = {
     { id: 17, name: 'Greta Horn',    towerId: 4, status: 'IN_AREA',   latitude: 54.2062, longitude: 11.0982, userId: 17, owner_id: _OWNER },
   ],
   boats: [
-    { id: 21, name: 'Seenotboot 1', callSign: 'Boot 1', towerId: 4, status: 'AT_TOWER', latitude: 54.2058, longitude: 11.0985, owner_id: _OWNER },
-    { id: 22, name: 'Seenotboot 2', callSign: 'Boot 2', towerId: 2, status: 'PATROL',   latitude: 54.2130, longitude: 11.0910, owner_id: _OWNER },
+    { id: 21, name: 'Seenotboot 1', callSign: 'Boot 1', towerId: 4, status: 'AT_TOWER',      latitude: 54.2058, longitude: 11.0985, owner_id: _OWNER },
+    { id: 22, name: 'Seenotboot 2', callSign: 'Boot 2', towerId: 2, status: 'PATROL',        latitude: 54.2130, longitude: 11.0910, owner_id: _OWNER },
+    { id: 23, name: 'Seenotboot 3', callSign: 'Boot 3', towerId: 3, status: 'OUT_OF_SERVICE', latitude: 54.2098, longitude: 11.0935, owner_id: _OWNER },
   ],
   requests: [
     { id: 31, guardId: 14, reason: 'PAUSE', note: 'Kurze Pause', status: 'APPROVED', createdAt: _nowIso(-25), decidedAt: _nowIso(-23), rejectionReason: null, owner_id: _OWNER },
@@ -83,14 +84,28 @@ function _deriveTowerStatus(currentStaff, requiredStaff) {
 const _towerName = (id) => { const t = _db.towers.find(x => x.id === id); return t ? t.name : null; };
 const _guardName = (id) => { const g = _db.guards.find(x => x.id === id); return g ? g.name : null; };
 
+// Boots-Beitrag zur Sollstärke (Spiegel von server/status.js: boatStaffDelta).
+function _boatStaffDelta(status) {
+  if (status === 'AT_TOWER') return 1;
+  if (status === 'PATROL' || status === 'DEPLOYED') return -1;
+  return 0; // OUT_OF_SERVICE / sonst
+}
 function _towersView() {
   return _db.towers.map(t => {
     const currentStaff = _db.guards.filter(g => g.towerId === t.id && g.status === 'IN_AREA').length;
+    const boatStatuses = _db.boats.filter(b => b.towerId === t.id).map(b => b.status);
+    const required = Math.max(1, (t.requiredStaff || 2) + boatStatuses.reduce((s, st) => s + _boatStaffDelta(st), 0));
+    const away = boatStatuses.filter(s => s === 'PATROL' || s === 'DEPLOYED').length;
     return {
       id: t.id, name: t.name, callSign: t.callSign,
       latitude: t.latitude, longitude: t.longitude,
-      requiredStaff: t.requiredStaff, currentStaff,
-      status: _deriveTowerStatus(currentStaff, t.requiredStaff),
+      requiredStaff: t.requiredStaff, effectiveRequiredStaff: required, currentStaff,
+      hasBoat: boatStatuses.length > 0,
+      boatsAtTower: boatStatuses.filter(s => s === 'AT_TOWER').length,
+      boatsAway: away,
+      boatsBroken: boatStatuses.filter(s => s === 'OUT_OF_SERVICE').length,
+      boatWarning: away > 0,
+      status: _deriveTowerStatus(currentStaff, required),
     };
   });
 }

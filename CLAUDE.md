@@ -44,7 +44,7 @@ auf einer OpenStreetMap-Karte (Leaflet).
 server.js          Express (Port 3002), Static aus ../public, Route-Registration, /api/version, /api/config, WS
 admin-server.js    createAdminApp({sessionMiddleware}) (vom Haupt-Prozess auf ADMIN_PORT eingebettet) + Standalone-Start (require.main-Guard, eigene DB)
 realtime.js        WebSocket-Server (/api/ws): broadcast(type) an ALLE Clients (gemeinsames Lagebild)
-status.js          Reine Statuslogik: deriveTowerStatus() (DOM-/DB-frei, testbar)
+status.js          Reine Statuslogik (DOM-/DB-frei, testbar): deriveTowerStatus() + boots-abhängige Sollstärke (boatStaffDelta/effectiveRequiredStaff/summarizeBoats)
 middleware.js      requireAuth (lädt req.user inkl. Rolle + owner_id) + requireRole(...) (HAUPTWACHE darf alles) + requireWachfuehrer (striktes WF-Gate OHNE Admin-Bypass) + viewScope(user)/isAdmin (Mandanten-Isolation)
 http-common.js     Geteilte HTTP-Bausteine: securityHeaders, trustProxyValue (TRUST_PROXY-Env), overrideClientIp (req.ip aus CF-Connecting-IP/X-Forwarded-For – Audit+Rate-Limit; fälschbar ohne Origin-Lockdown), 404/Error/Signal-Handler
 config.json        Enums/Labels (Rollen, Status, Gründe) + Map-Defaults → GET /api/config
@@ -104,7 +104,14 @@ audit_log  id, user_id(FK), action, entity_type, entity_id, details(JSON), ip_ad
 (`guardStaff`) **+** manuell vom Wachführer gemeldete Anwesende (`towers.present_staff`).
 So kann ein WF die Ist-Stärke direkt als Zahl melden, ohne für jeden WG ein Konto/Guard-Objekt
 anzulegen (`+/-`-Stepper in Tabelle & Karten-Popup; Feld im Turm-Modal). `GREEN` ≥ Sollstärke,
-`YELLOW` ≥ 50 %, sonst `RED`.
+`YELLOW` ≥ 50 %, sonst `RED`. Die Farbe wird gegen die **effektive** Sollstärke berechnet.
+**Boots-abhängige Sollstärke (`status.js`):** Basis-Soll = `towers.required_staff` (Standard **2**).
+Pro zugeordnetem Boot (`boats.tower_id`) kommt ein Beitrag hinzu (`boatStaffDelta`): `AT_TOWER`
+**+1** (Bootsführer → 3 = 2 WF + 1 BF), `OUT_OF_SERVICE` **±0** (wie normaler Turm), `PATROL`/
+`DEPLOYED` **−1** (Boot weg → Sollstärke 1 + Warnung „Boot nicht am Turm"). `effectiveRequiredStaff`
+summiert die Beiträge (min. 1). `GET /api/towers` liefert dazu `effectiveRequiredStaff` + Boots-Lage
+(`hasBoat`/`boatsAtTower`/`boatsAway`/`boatsBroken`/`boatWarning`); das Dashboard zeigt sie als
+farbige „Boot"-Spalte.
 **Mandanten-Modell (Scope-Isolation – wie Wachplan-Generator):** Jeder **Wachführer ist ein
 eigener Mandant**. Jedes Domänenobjekt (Turm/Boot/Wachgänger) und jedes Personal-Konto trägt
 `owner_id` = der besitzende Wachführer. Ein Wachführer **sieht/verwaltet/genehmigt nur sein

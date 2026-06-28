@@ -208,8 +208,9 @@ function renderMap() {
     let popup =
       `<b>${escapeHtml(t.name)}</b> ${t.callSign ? '(' + escapeHtml(t.callSign) + ')' : ''}<br>` +
       `Status: ${escapeHtml(labelOf('towerStatus', t.status))}<br>` +
-      `Besetzung: ${t.currentStaff}/${t.requiredStaff}` +
-      (hasBoat ? '<br><b>⛵ Boot zugeordnet</b>' : '');
+      `Besetzung: ${t.currentStaff}/${t.effectiveRequiredStaff != null ? t.effectiveRequiredStaff : t.requiredStaff}` +
+      (hasBoat ? '<br><b>⛵ Boot zugeordnet</b>' : '') +
+      (t.boatWarning ? '<br><span style="color:#e0a93b">⚠ Boot nicht am Turm</span>' : '');
     if (canEditTowers) {
       popup += `<br><div style="margin-top:6px;display:flex;align-items:center;gap:6px">` +
         `Anwesend: <button onclick="adjustTowerPresent(${t.id}, -1)" ${t.presentStaff <= 0 ? 'disabled' : ''}>−</button>` +
