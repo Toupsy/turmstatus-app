@@ -88,6 +88,15 @@
   .emoji-marker .map-marker-shell{width:30px;height:36px}
   .emoji-marker .map-marker-pin{width:26px;height:26px}
   .emoji-marker .map-marker-symbol{top:3px;font-size:15px}
+  /* Dauerhaftes Turm-Namens-Label (hoher Kontrast, damit auf der Karte gut lesbar). */
+  .leaflet-tooltip.tower-label{background:rgba(6,19,32,.92);color:#f3f9fc;border:1px solid var(--line-strong);border-left-width:4px;border-radius:7px;padding:3px 9px;font-size:12px;font-weight:700;line-height:1.25;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.55);text-shadow:0 1px 2px rgba(0,0,0,.85)}
+  .leaflet-tooltip.tower-label::before{display:none}
+  .leaflet-tooltip.tower-label.status-GREEN{border-left-color:var(--green)}
+  .leaflet-tooltip.tower-label.status-YELLOW{border-left-color:var(--warn)}
+  .leaflet-tooltip.tower-label.status-RED{border-left-color:var(--coral)}
+  .leaflet-tooltip.tower-label.status-UNKNOWN{border-left-color:#9bb0bd}
+  .tower-label .tower-label-name{display:inline}
+  .tower-label .tower-label-call{margin-left:5px;color:var(--foam);font-weight:600;font-size:11px}
   /* Rechtsklick-Kontextmenü auf der Karte (Wachführer): Turm/Boot an der Klickposition anlegen. */
   .map-context-menu{position:absolute;display:none;z-index:1500;background:linear-gradient(165deg,var(--navy-2),var(--paper));border:1px solid var(--line-strong);border-radius:10px;padding:5px;box-shadow:0 6px 24px rgba(0,0,0,.5);min-width:190px}
   .map-context-menu .ctx-coord{font-size:.74rem;color:var(--text-dim);padding:4px 10px 6px}
