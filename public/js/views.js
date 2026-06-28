@@ -192,14 +192,43 @@ async function moveTower(id, lat, lng) {
   catch (err) { showToast(err.message); refreshTowers(); }
 }
 
+// Turmfarbe lokal ableiten (Spiegel von server/status.js) – für optimistische Updates,
+// damit Zahl UND Status-Pille sofort reagieren, bevor der Server-Refresh sie bestätigt.
+function deriveTowerStatusLocal(currentStaff, requiredStaff) {
+  const req = requiredStaff || 1;
+  if (currentStaff >= req) return 'GREEN';
+  if (currentStaff >= req / 2) return 'YELLOW';
+  return 'RED';
+}
+
+// Gebündelte (debounced) PATCH-Writes des Steppers, key = Turm-ID.
+const _presentStaffTimers = new Map();
+
 // Anwesende Wachgänger eines Turms um delta (±1) anpassen – Ist-Besetzung ohne Accounts.
-async function adjustTowerPresent(id, delta) {
+// Optimistisch: lokaler Zustand + Tabelle/Karte aktualisieren sich SOFORT (kein Warten auf
+// Server-Roundtrip). Mehrere schnelle Klicks werden zu EINEM PATCH mit dem Endwert gebündelt;
+// der nachfolgende WS-Refresh gleicht den Zustand verbindlich ab. Fehler → revert via refresh.
+function adjustTowerPresent(id, delta) {
   const t = towers.find(x => x.id === id);
   if (!t) return;
-  const next = Math.max(0, Math.min(99, (t.presentStaff || 0) + delta));
-  if (next === t.presentStaff) return;
-  try { await apiPatch('/api/towers/' + id, { presentStaff: next }); }
-  catch (err) { showToast(err.message); refreshTowers(); }
+  const prev = t.presentStaff || 0;
+  const next = Math.max(0, Math.min(99, prev + delta));
+  if (next === prev) return;
+  // Optimistisches Update von Ist-Besetzung, effektiver Stärke und abgeleiteter Farbe.
+  t.presentStaff = next;
+  if (typeof t.currentStaff === 'number') t.currentStaff += (next - prev);
+  t.status = deriveTowerStatusLocal(t.currentStaff, t.requiredStaff);
+  renderTowers();
+  scheduleRenderMap();
+  // PATCH bündeln: erst senden, wenn der Nutzer kurz nicht mehr klickt.
+  if (_presentStaffTimers.has(id)) clearTimeout(_presentStaffTimers.get(id));
+  _presentStaffTimers.set(id, setTimeout(() => {
+    _presentStaffTimers.delete(id);
+    const cur = towers.find(x => x.id === id);
+    const value = cur ? cur.presentStaff : next;
+    apiPatch('/api/towers/' + id, { presentStaff: value })
+      .catch(err => { showToast(err.message); refreshTowers(); });
+  }, 300));
 }
 
 async function deleteTower(id) {
@@ -275,6 +304,9 @@ function renderBoats() {
 }
 
 async function setBoatStatus(id, status) {
+  const b = boats.find(x => x.id === id);
+  // Optimistisch: lokalen Status + Karte sofort aktualisieren, dann persistieren.
+  if (b) { b.status = status; scheduleRenderMap(); }
   try { await apiPatch('/api/boats/' + id, { status }); showToast('Boot-Status aktualisiert'); }
   catch (err) { showToast(err.message); refreshBoats(); }
 }
@@ -282,6 +314,14 @@ async function setBoatStatus(id, status) {
 // Boot einem Turm zuordnen (leerer Wert = kein Turm).
 async function setBoatTower(id, towerVal) {
   const towerId = towerVal ? Number(towerVal) : null;
+  const b = boats.find(x => x.id === id);
+  // Optimistisch: Zuordnung lokal setzen (towerName aus bekannter Turmliste), dann persistieren.
+  if (b) {
+    b.towerId = towerId;
+    const t = towerId ? towers.find(x => x.id === towerId) : null;
+    b.towerName = t ? t.name : null;
+    scheduleRenderMap();
+  }
   try { await apiPatch('/api/boats/' + id, { towerId }); showToast('Turm-Zuordnung aktualisiert'); }
   catch (err) { showToast(err.message); refreshBoats(); }
 }
