@@ -3,7 +3,7 @@
   // Liefert die gebaute Web-SPA (apps/web/dist) statisch aus; nur `/api/*`
   // erreicht den Worker (Demo-Mock, siehe worker/index.js).
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "turmstatus-preview",
+  "name": "turmstatus-app",
   "main": "worker/index.js",
   "compatibility_date": "2025-06-01",
   "assets": {
