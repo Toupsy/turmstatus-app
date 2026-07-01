@@ -2,6 +2,30 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Neubau: Full-TypeScript (Fastify + Drizzle + Svelte)
+
+Die App wurde vom alten Stack (Express + SQLite + Vanilla JS) **komplett neu gebaut**, um sie
+schneller und wartbarer zu machen. Ziel und Kern-Workflows bleiben identisch.
+
+- **Monorepo (npm workspaces):** `packages/shared` (geteilte Status-/Validierungslogik + Typen),
+  `apps/api` (Fastify + better-sqlite3/Drizzle), `apps/web` (öffentliche Svelte-SPA),
+  `apps/admin` (interne Admin-SPA).
+- **Schneller:** Svelte-Stores mit feingranularem Re-Rendering statt komplettem `innerHTML`-Neuaufbau;
+  synchrones better-sqlite3 mit WAL; geteilte Status-Logik (kein Duplikat zwischen Server und Client).
+- **Harte Admin-Grenze:** Admin-API + Admin-SPA laufen ausschließlich auf einem separaten, nur
+  host-lokal gebundenen Port. Auf dem öffentlichen Port existiert `/api/admin/*` nicht (404), sodass
+  die App via Cloudflare öffentlich sein kann, ohne den Admin-Bereich preiszugeben.
+- **Erhalten:** Mandanten-Isolation (owner_id), Demo-Vorlagen, boots-abhängige Sollstärke, manuelle
+  Ist-Besetzung, `-1/+1`-Workflow, Audit-Log, Live-Updates (WebSocket + Polling), Docker/GHCR/Semantic-Release.
+- **Entfallen:** Kontrollfahrten-Workflow, Cloudflare-Preview-Mock, ungenutzte Crypto-Schicht und die
+  SQLite-Multiprozess-Härtung (Einzelprozess + WAL machen sie überflüssig).
+- **Tests:** Vitest – 32 Fälle (Status-/ID-Logik, Auth/Setup, Scope-Isolation, `-1/+1`, Boots-Soll,
+  Admin-Grenze). Browser-Smoke beider SPAs mit Chromium.
+
+---
+
+_Die folgenden Einträge beziehen sich auf den alten (abgelösten) Stack und bleiben als Historie erhalten._
+
 ## Fix: Boot-/Anfrage-Änderungen wirken sofort auf die Türme (Live-Reaktivität)
 
 Eine Boot-Status-Änderung (z. B. im Dashboard) brauchte bis zu **30 Sekunden**, bis Turm-Tabelle

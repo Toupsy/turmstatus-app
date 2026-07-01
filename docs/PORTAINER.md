@@ -22,27 +22,29 @@ Workflow `.github/workflows/docker.yml`:
 2. **Build method: Repository** – URL `https://github.com/Toupsy/turmstatus-app`,
    Reference `refs/heads/main`, Compose path `docker-compose.yml`.
    *(Alternativ Web editor + Inhalt von `docker-compose.yml` einfügen.)*
-3. **Environment variables** (Secrets vorher erzeugen):
+3. **Environment variables** (Secret vorher erzeugen):
    ```bash
-   openssl rand -base64 32   # MASTER_SECRET, SESSION_SECRET
-   openssl rand -base64 16   # SALT
+   openssl rand -base64 48   # SESSION_SECRET (min. 32 Zeichen)
    ```
    | Variable | Pflicht | Beispiel / Standard |
    |---|---|---|
-   | `MASTER_SECRET` | ✅ | `<rand-base64-32>` (min. 32 Zeichen) |
-   | `SALT` | ✅ | `<rand-base64-16>` (min. 16 Zeichen) |
-   | `SESSION_SECRET` | ✅ | `<rand-base64-32>` (min. 16 Zeichen) |
+   | `SESSION_SECRET` | ✅ | `<rand-base64-48>` (**min. 32 Zeichen**) |
    | `ADMIN_USERNAME` | – | `hauptwache` |
    | `ADMIN_PASSWORD` | ✅* | starkes Passwort (*für Erst-Admin) |
-   | `HTTP_PORT` | – | `3002` |
-   | `ADMIN_HTTP_PORT` | – | `3003` |
+   | `HTTP_PORT` | – | `3002` (öffentliche App) |
+   | `ADMIN_HTTP_PORT` | – | `3003` (Admin, nur host-lokal) |
    | `COOKIE_SECURE` | – | `true` (hinter HTTPS-Proxy) |
+   | `REGISTRATION_MODE` | – | `disabled` \| `open` \| `code` |
+   | `TRUST_PROXY` | – | `1` (hinter Cloudflare/NGINX) |
    | `IMAGE_TAG` | – | `latest` |
-4. **Deploy the stack** → warten bis `dlrg-turmstatus` und `dlrg-turmstatus-admin` `healthy` sind.
+4. **Deploy the stack** → warten bis `dlrg-turmstatus` `healthy` ist.
 
 ## 3. Zugriff
 - App: `http://<NAS-IP>:3002` – Login `hauptwache` / `ADMIN_PASSWORD` (danach Passwort ändern).
-- Admin-Panel: `http://<NAS-IP>:3003`.
+- Admin-Bereich: `http://127.0.0.1:3003` **auf der NAS selbst** (bzw. per SSH-Tunnel). Der
+  Admin-Port wird per Compose nur an `127.0.0.1` gebunden und ist daher **absichtlich nicht** von
+  außen erreichbar – so kann die App via Cloudflare öffentlich gemacht werden, ohne die
+  Benutzerverwaltung freizugeben. (Die Admin-API existiert ohnehin nur auf diesem Port.)
 
 ## 4. Updates
 Neues Image bauen lassen → **Stacks → turmstatus → Pull and redeploy** (Re-pull image aktiviert).

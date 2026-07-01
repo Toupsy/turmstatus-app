@@ -1,8 +1,11 @@
-node_modules
+**/node_modules
+**/dist
+**/.vite
+**/*.tsbuildinfo
 data
-npm-debug.log
 .git
 .gitignore
+.github
 .DS_Store
 *.md
 !README.md
@@ -13,8 +16,6 @@ npm-debug.log
 *.swp
 *.swo
 *~
-dist
-build
 coverage
 .claude
 .cache

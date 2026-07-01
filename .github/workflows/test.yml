@@ -14,4 +14,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Typecheck (shared + api)
+        run: npm run typecheck
+      - name: Svelte-Check (web + admin)
+        run: |
+          npm run check --workspace @turmstatus/web
+          npm run check --workspace @turmstatus/admin
+      - name: Build (SPAs + API)
+        run: npm run build
+      - name: Unit- & Integrationstests
+        run: npm test
