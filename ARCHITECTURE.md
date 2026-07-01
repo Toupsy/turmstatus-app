@@ -1,93 +1,77 @@
 # Architekturkonzept – Turmstatus
 
-Zentrales Lage- und Statussystem für einen Wasserrettungsdienst an der Ostsee.
-Bildet den bisherigen Funkverkehr (`-1`/`+1`) digital ab und stellt die Lage aller Türme,
-Wachgänger und Boote in Echtzeit auf einer Karte dar.
+## Überblick
+TypeScript-Monorepo mit vier Workspaces:
 
-Bewusst **deckungsgleich** zum DLRG-Wachplan-Generator aufgebaut (gemeinsame Infrastruktur),
-um beide Programme später zusammenführen zu können.
-
-## 1. Technologieentscheidung
-| Schicht | Technologie | Begründung |
-|---|---|---|
-| Backend | **Express (Node.js 20)** | Schlank, identisch zum Schwester-Projekt, einfaches Single-Image-Deployment |
-| DB | **SQLite** (`sqlite3`) | Eine Datei im Volume, kein separater DB-Container, robust für eine Wache |
-| Auth | **Session-Cookies** (`express-session`, SQLite-Store) + bcryptjs | Serverseitige Session, kein Token-Handling im Client |
-| Realtime | **WebSocket** (`ws`) auf `/api/ws` | Push aller Lageänderungen ohne Reload |
-| Frontend | **Vanilla JS** + Leaflet/OpenStreetMap | Kein Build-Schritt, keine API-Keys, mergebar mit dem Wachplan-Generator |
-| Container | **Docker + Compose**, Multi-Arch | Läuft auf NAS (ARM64 & x86_64) |
-
-## 2. Datenmodell
-Siehe **CLAUDE.md → Datenmodell** und `server/db/schema.sql`. Kernobjekte:
-`users` (Login + Rolle), `towers`, `guards`, `boats`, `minus_one_requests`, `audit_log`.
-Turmfarbe wird aus der Ist-/Soll-Besetzung abgeleitet (`server/status.js`).
-
-## 3. API-Endpunkte (Auswahl)
 ```
-POST   /api/auth/login | logout | init | register      GET /api/auth/me | needs-setup | registration-status
-PUT    /api/auth/password
-
-GET    /api/towers                  POST/PATCH/DELETE   (Status abgeleitet)
-GET    /api/guards                  POST/DELETE
-PATCH  /api/guards/:id/status       PATCH /api/guards/:id/position
-GET    /api/boats                   POST/PATCH/DELETE
-
-POST   /api/requests/minus-one      [WACHGAENGER|BOOTSFUEHRER|WACHFUEHRER]
-POST   /api/requests/:id/approve    POST /api/requests/:id/reject   [WACHFUEHRER(eigene Wache); Admin NICHT]
-POST   /api/requests/:id/return     GET  /api/requests?status=PENDING
-
-GET    /api/control-trips           POST [BOOTSFUEHRER]
-POST   /api/control-trips/:id/approve  POST /api/control-trips/:id/reject  [WACHFUEHRER(eigene Wache); Admin NICHT]
-
-GET    /api/dashboard/summary
-GET    /api/admin/users  POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [App-Admin]
-GET    /api/admin/towers  GET /api/admin/audit-log                              [App-Admin]
-GET    /api/team/members POST  PATCH/:id  DELETE/:id  POST/:id/reset-password   [Wachführer, nur eigene Wache]
-
-GET    /api/config   GET /api/version   GET /health
-WS     /api/ws                       (Broadcast aller Lageänderungen)
+packages/shared   Reine, geteilte Logik + Verträge (Status-Ableitung, zod-Schemas, DTO-Typen, Config)
+apps/api          Fastify-Backend (better-sqlite3 + Drizzle), Session-Auth, WebSocket
+apps/web          Öffentliche Operativ-SPA (Svelte + Vite + Leaflet)
+apps/admin        Interne Admin-SPA (Svelte + Vite)
 ```
 
-## 4. Rollen & Rechte (serverseitig, `server/middleware.js`)
-App-Admin = `is_admin` (technischer Administrator). „Hauptwache" als externe Instanz ist noch nicht
-getrennt modelliert (aktuell = `role=HAUPTWACHE` + `is_admin`).
+Der Kern-Grundsatz: **Status- und Validierungslogik lebt einmal** in `packages/shared` und wird
+von Server und beiden Clients importiert – keine doppelte Wahrheit mehr.
 
-Der App-Admin hat **reine Ansichts- + Account-Verwaltungsrechte** und KEINE operativen
-Bestätigungsrechte. Genehmigt wird ausschließlich vom Wachführer der jeweiligen Wache.
+## Prozess- & Port-Modell
+Ein einziger Node-Prozess (`apps/api/src/server.ts`) startet **zwei** Fastify-Instanzen, die sich
+DB-Verbindung, Session-Store und Realtime-Hub teilen:
 
-| Aktion | App-Admin | Wachführer | Wachgänger | Bootsführer |
-|---|:---:|:---:|:---:|:---:|
-| Lagebild sehen (Türme/Boote/Wachgänger) | ✅ | ✅ | ✅ | ✅ |
-| `-1` beantragen (Türme) | – | ✅ | ✅ | ✅ |
-| `-1` genehmigen/ablehnen | – | eigene Wache | – | – |
-| `+1` / Rückkehr melden | – | ✅ | ✅ | ✅ |
-| Kontrollfahrt beantragen (Boote) | – | – | – | ✅ |
-| Kontrollfahrt genehmigen/ablehnen | – | eigene Wache | – | – |
-| Türme/Boote anlegen/bearbeiten (Infrastruktur) | ✅ | eigene Wache | – | – |
-| Wachführer-Profil/Turmstati ansehen | ✅ (read-only) | – | – | – |
-| Wachführer anlegen (+ Wache zuweisen) | ✅ | – | – | – |
-| Wachgänger/Bootsführer der eigenen Wache anlegen | – | ✅ (nur eigene Wache) | – | – |
-| Audit-Log | ✅ | – | – | – |
+| Instanz | Port (Default) | Bind (Default) | Inhalt |
+|---|---|---|---|
+| Public | 3002 | `0.0.0.0` | Operativ-API + `apps/web`-SPA |
+| Admin  | 3003 | `127.0.0.1` | Admin-API (`/api/admin/*`) + `apps/admin`-SPA + read-only Domänen-GETs |
 
-## 5. Echtzeit & Robustheit
-- Jede Mutation in den `api/*`-Routen ruft `broadcast('<typ>-updated')` → alle verbundenen
-  Clients laden die betroffenen Daten neu. Frontend pollt zusätzlich alle 30 s (Fallback).
-- WebSocket-Auth über die bestehende Express-Session (Upgrade-Handler in `server/realtime.js`).
-- SQLite im persistenten Volume; WAL-Modus; Healthchecks in Compose.
-- Alle Mutationen erzeugen einen `audit_log`-Eintrag.
+**Harte Admin-Grenze:** Die Admin-Routen werden ausschließlich auf der Admin-Instanz registriert.
+Auf dem öffentlichen Port existiert `/api/admin/*` gar nicht (404) – das ist eine Netzwerk-Grenze,
+kein bloßer Rollen-Check. In Docker wird der Admin-Port nur an `127.0.0.1` des Hosts gemappt, sodass
+die App via Cloudflare öffentlich sein kann, der Admin-Bereich aber intern bleibt.
 
-## 6. Ordnerstruktur
+## Datenfluss
 ```
-turmstatus-app/
-├── server.js                 (Shim → server/server.js)
-├── package.json  Dockerfile  docker-compose.yml  docker-compose.build.yml  .env.example
-├── server/
-│   ├── server.js  admin-server.js  realtime.js  status.js  middleware.js  config.json
-│   ├── db/  connection init schema.sql crypto session ids audit
-│   └── api/ auth towers guards boats requests dashboard admin
-├── public/
-│   ├── Turmstatus.html  admin.html
-│   └── js/ state utils api auth map views ws init
-├── test/  status ids crypto api
-└── docs/  PORTAINER.md  FEATURES.md
+Browser (Svelte-Store) ──fetch──▶ Fastify-Route ──Drizzle──▶ SQLite (WAL)
+        ▲                               │
+        │                               ├─ recordAudit()  → audit_log
+        └──── WebSocket ◀── broadcast() ─┘  (bei jeder Mutation)
 ```
+Jede Mutation validiert den Body per zod, prüft Owner/Scope, schreibt via Drizzle, protokolliert ins
+Audit-Log und broadcastet ein `*-updated`-Event. Clients abonnieren den WebSocket und laden die
+betroffenen Daten gezielt nach (Fallback: 30-s-Polling). Die SPAs führen für schnelle Interaktionen
+zusätzlich optimistische Updates aus.
+
+## Datenbank
+- **better-sqlite3** (synchron) + **Drizzle ORM**. Da nur ein Prozess die DB öffnet, ist
+  `journal_mode=WAL` sicher und schnell.
+- Schema in `apps/api/src/db/schema.ts`; Migrationen via `drizzle-kit generate` →
+  `apps/api/migrations/`, beim Start durch `runMigrations()` angewandt.
+- Tabellen: `users`, `towers`, `guards`, `boats`, `minus_one_requests`, `audit_log`,
+  `tower_templates`, `boat_templates`, `sessions`.
+
+## Auth & Mandanten
+- Session-Cookie (`@fastify/session` + SQLite-Store), bcrypt-Hashes, In-Memory-Brute-Force-Schutz.
+- `computeScope(user)` liefert den Sichtbarkeits-Scope (Admin → alles; Wachführer → eigene `id`;
+  Wachgänger/Bootsführer → `owner_id` ihres Wachführers). Alle Domänen-Queries filtern danach.
+- Gates: `requireAuth`, `requireWachfuehrer` (kein Admin-Bypass), `requireAdmin`, `requireRole(...)`.
+
+## API-Oberfläche (Auszug)
+```
+Auth      GET  /api/auth/me · POST /api/auth/login|logout|init|register|password · GET /needs-setup, /registration-status
+Türme     GET/POST /api/towers · PATCH/DELETE /api/towers/:id
+Wachg.    GET/POST /api/guards · PATCH /api/guards/:id · PATCH /:id/status · PATCH /:id/position · DELETE /:id
+Boote     GET/POST /api/boats · PATCH /api/boats/:id · PATCH /:id/status · DELETE /:id
+-1/+1     GET /api/requests · POST /minus-one · POST /:id/approve|reject|return
+Sonstiges GET /api/dashboard/summary · GET /api/config · GET /api/version · GET /health · WS /api/ws
+Team (WF) GET/POST /api/team/members · PATCH/DELETE /:id · POST /:id/reset-password
+Admin*    GET/POST/PATCH/DELETE /api/admin/users · GET /api/admin/audit-log · .../tower-templates · .../boat-templates
+```
+`* nur auf dem internen Admin-Listener.`
+
+## Frontend
+- **Svelte 5 + Vite**, Zustand über Svelte-Stores; feingranulares Re-Rendering statt DOM-Neuaufbau.
+- Karte als Leaflet-Komponente (verschiebbare Marker, Klick-/Rechtsklick-Platzierung).
+- Build als statische Dateien; das Backend liefert sie aus (SPA-Fallback), sodass alles in einem
+  Container läuft.
+
+## Deployment
+Multi-Stage-Docker-Image (baut SPAs + API, entfernt Dev-Deps), ein Container, Ports 3002 + 3003.
+CI: Tests + Multi-Arch-Image nach GHCR + Semantic-Release.

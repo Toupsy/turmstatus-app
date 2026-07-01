@@ -1,77 +1,76 @@
 # 🛟 Turmstatus – Digitales Wach- und Statussystem
 
-Zentrales Lage- und Statussystem für einen Wasserrettungsdienst an der Ostsee.
-Ersetzt den bisherigen Funkverkehr (`-1` beim Verlassen des Bereichs, `+1` bei Rückkehr)
-durch einen digitalen Genehmigungs-Workflow und zeigt die Lage aller **Türme**,
-**Wachgänger** und **Boote** in **Echtzeit** auf einer OpenStreetMap-Karte.
-
-> Aufgebaut auf demselben Stack wie der **DLRG-Wachplan-Generator**
-> (Express + SQLite + Vanilla JS), damit beide Programme später zusammengeführt
-> werden können.
+Digitales Wach- und Statussystem für einen Wasserrettungsdienst an der Ostsee. Es ersetzt den
+Funkverkehr (`-1` beim Verlassen des Turms, `+1` bei Rückkehr) durch einen digitalen
+Genehmigungs-Workflow und zeigt die Lage aller **Türme, Wachgänger und Boote** in **Echtzeit**
+auf einer OpenStreetMap-Karte.
 
 ## Funktionen
-- **Einsatzkarte** (OpenStreetMap/Leaflet): Türme farbcodiert (🟢 besetzt, 🟡 reduziert,
-  🔴 kritisch), Wachgänger (🚩) und Boote (⛵) als Marker mit Status.
-- **Digitale -1 / +1**: Wachgänger beantragt „Bereich verlassen" mit Grund (Pause, Toilette,
-  Verpflegung, Material, Sonstiges) + optionalem Freitext → Hauptwache genehmigt/lehnt ab → `+1` Rückkehr.
-- **Dashboard Hauptwache**: Lage-Kennzahlen (Türme, im Dienst, aktive -1, Boote, offene Anfragen).
-- **Kontrollfahrten**: Bootsführer beantragen eine Kontrollfahrt für ein Boot → Hauptwache/Wachführer
-  genehmigt oder lehnt ab (erste Ausbaustufe, ohne weitere Boot-Statuslogik).
-- **Echtzeit** über WebSockets (mit Polling-Fallback alle 30 s).
-- **Rollen** serverseitig erzwungen: Hauptwache, Wachführer, Wachgänger, Bootsführer.
-- **Konten-Hierarchie**: Der App-Admin legt Wachführer an (mit Wache); jeder Wachführer legt das
-  Personal seiner **eigenen** Wache (Wachgänger/Bootsführer) selbst an.
-- **Benutzerverwaltung** + **Audit-Protokoll** (Wer/Wann/Was), im Admin-Panel (Port 3003) oder
-  in der App (Tab „Verwaltung"): App-Admin verwaltet alle, Wachführer nur die eigene Wache.
-- **Responsive** für Smartphone, Tablet und Desktop.
+- **Live-Lagekarte** (Leaflet): farbcodierte Türme (grün/gelb/rot), Wachgänger- und Boots-Marker.
+  Wachführer positionieren Türme/Boote per Klick, Drag oder Rechtsklick auf die Karte.
+- **-1/+1-Workflow:** Wachgänger beantragt das Verlassen des Bereichs → der Wachführer genehmigt
+  oder lehnt ab → Rückkehr per `+1`. Jeder Schritt landet im Audit-Log.
+- **Türme, Boote, Wachgänger** verwalten (owner-scoped je Wachführer).
+- **Boots-abhängige Sollstärke:** liegt ein Boot am Turm, steigt die Sollstärke (Bootsführer);
+  ist das Boot unterwegs, sinkt sie – mit Warnung „Boot nicht am Turm".
+- **Manuelle Ist-Besetzung:** der Wachführer meldet anwesende Kräfte per +/–, ohne für jeden ein
+  Konto anzulegen.
+- **Mandanten-Modell:** jeder Wachführer sieht/verwaltet/genehmigt nur sein Eigenes.
+- **Interner Admin-Bereich:** Benutzerverwaltung, Audit-Log, Demo-Vorlagen – auf einem separaten,
+  nur lokal erreichbaren Port.
+- **Echtzeit** via WebSocket (+ 30-s-Polling-Fallback).
 
-## Technologie
-| Schicht | Technologie |
-|---|---|
-| Backend | Node.js + **Express**, SQLite (`sqlite3`), `express-session` (SQLite-Store), bcryptjs, `ws` |
-| Frontend | **Vanilla JS** (kein Framework) + Leaflet/OpenStreetMap |
-| Auth | Session-Cookies (HTTPOnly), Rollenrechte serverseitig, Brute-Force-Schutz |
-| Deployment | Docker (Multi-Arch amd64 + arm64), GHCR-Image, optional Admin-Server |
-
-Architektur-Details: [ARCHITECTURE.md](ARCHITECTURE.md) · Projektkontext für Entwickler: [CLAUDE.md](CLAUDE.md).
+## Tech-Stack
+TypeScript-Monorepo (npm workspaces): **Fastify** + **better-sqlite3/Drizzle** (Backend),
+**Svelte 5 + Vite** + **Leaflet** (zwei SPAs), **Vitest** (Tests). Ein Node-Prozess bedient zwei
+Ports: die öffentliche App (3002) und den internen Admin-Bereich (3003).
 
 ## Schnellstart (lokal, ohne Docker)
 ```bash
-npm ci
-MASTER_SECRET=$(openssl rand -base64 32) \
-SALT=$(openssl rand -base64 16) \
-SESSION_SECRET=$(openssl rand -base64 32) \
-ADMIN_USERNAME=hauptwache ADMIN_PASSWORD=wache2024 \
-npm start
-# App: http://localhost:3002   ·   Admin-Panel: npm run start:admin → http://localhost:3003
+npm install
+npm run build
+SESSION_SECRET=mindestens-32-zeichen-langes-secret \
+  ADMIN_PASSWORD=wache2024 \
+  npm start
+# → http://localhost:3002 (App)   ·   http://localhost:3003 (Admin, nur lokal)
 ```
-Beim ersten Start werden ein Hauptwache-Konto sowie ein Demo-Lagebild (4 Türme, 2 Boote) angelegt.
-
-## Deployment (Docker / NAS)
+**Entwicklung mit Hot-Reload** (drei Terminals oder `&`):
 ```bash
-cp .env.example .env   # Werte (Secrets) eintragen
-docker compose up -d   # nutzt vorgefertigtes GHCR-Image
+npm run dev          # API (tsx watch) auf 3002/3003
+npm run dev:web      # Vite-Dev-Server der App (5173), proxyt /api → 3002
+npm run dev:admin    # Vite-Dev-Server des Admins (5174), proxyt /api → 3003
 ```
-- App: `http://<host>:3002` (`HTTP_PORT`), Admin-Panel: `http://<host>:3003` (`ADMIN_HTTP_PORT`).
-- Lokal selbst bauen: `docker compose -f docker-compose.build.yml up -d --build`.
-- Schritt-für-Schritt (Portainer/UGREEN): **[docs/PORTAINER.md](docs/PORTAINER.md)**.
 
-Die SQLite-Daten bleiben im Named-Volume `turmstatus-data` (`/app/data/turmstatus.db`).
-
-## Update
-- **Docker/Portainer:** neues Image bauen lassen (Push auf `main` oder Workflow manuell) →
-  **Pull and redeploy**.
-- **Lokal:** `git pull && npm ci && npm start`.
-
-## Sicherheit
-- Passwörter mit **bcryptjs** gehasht; **Session-Cookies** (HTTPOnly, sameSite=lax, 7 / 30 Tage).
-- **Rollenrechte** serverseitig erzwungen; **Brute-Force-Schutz** (IP + Account, 10/15 min).
-- **Eingabevalidierung**, **Audit-Log** aller Mutationen, Security-Header inkl. CSP.
-- Secrets ausschließlich über `.env` / Environment-Variablen (nicht in Git).
-
-## Entwicklung & Tests
+## Docker
 ```bash
-npm test          # Node --test: status, ids, crypto, Integrationstest (-1/+1)
-npm start         # Haupt-Server (3002)
-npm run start:admin  # Admin-Server (3003)
+# Vorgefertigtes Image aus GHCR:
+SESSION_SECRET=... ADMIN_PASSWORD=... docker compose up -d
+# Lokal bauen:
+SESSION_SECRET=... ADMIN_PASSWORD=... docker compose -f docker-compose.build.yml up -d --build
 ```
+Der Admin-Port wird nur an `127.0.0.1` des Hosts gebunden – so kann die App via Cloudflare/Reverse-
+Proxy öffentlich gemacht werden, während der Admin-Bereich intern bleibt. Details:
+[docs/PORTAINER.md](docs/PORTAINER.md).
+
+## Konfiguration
+Siehe [`.env.example`](.env.example). Wichtig: `SESSION_SECRET` (≥ 32 Zeichen), `ADMIN_PASSWORD`
+(Erst-Admin), `COOKIE_SECURE=false` ohne TLS, `ADMIN_BIND=127.0.0.1`.
+
+## Tests
+```bash
+npm test          # Vitest (Unit + API-Integration)
+npm run typecheck # tsc -b (shared + api)
+```
+
+## Rollen
+- **Hauptwache (App-Admin):** Kontoverwaltung + reine Ansicht (interner Admin-Bereich).
+- **Wachführer:** eigener Mandant – verwaltet Türme/Boote/Personal, genehmigt `-1`.
+- **Wachgänger:** darf `-1` beantragen.
+- **Bootsführer:** wie Wachgänger + darf den Boot-Status setzen.
+
+## Doku
+- Architektur: [ARCHITECTURE.md](ARCHITECTURE.md) · Entwickler-Kontext: [CLAUDE.md](CLAUDE.md)
+- Stand/ToDos: [HANDOFF.md](HANDOFF.md) · Feature-Historie: [docs/FEATURES.md](docs/FEATURES.md)
+
+## Lizenz
+MIT
