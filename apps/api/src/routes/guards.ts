@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
-import { guardCreateSchema, guardStatusSchema, positionSchema, parsePositiveInt } from '@turmstatus/shared';
+import { guardCreateSchema, guardUpdateSchema, guardStatusSchema, positionSchema, parsePositiveInt } from '@turmstatus/shared';
 import { guards, towers } from '../db/schema.js';
 import { requireAuth, requireWachfuehrer } from '../plugins/auth.js';
 import { parseBody } from '../lib/validate.js';
@@ -40,6 +40,33 @@ export async function guardRoutes(app: FastifyInstance): Promise<void> {
     app.realtime.broadcast('guards-updated');
     app.realtime.broadcast('towers-updated');
     return reply.code(201).send({ id: row.id });
+  });
+
+  // Stammdaten ändern (Name/Turm): nur Owner-Wachführer.
+  app.patch('/api/guards/:id', { preHandler: [requireAuth, requireWachfuehrer] }, async (req, reply) => {
+    const id = parsePositiveInt((req.params as { id: string }).id);
+    if (!id) return reply.code(400).send({ error: 'Ungültige ID' });
+    const body = parseBody(guardUpdateSchema, req.body, reply);
+    if (!body) return;
+    const uid = req.session.user!.id;
+    const existing = app.db.select().from(guards).where(and(eq(guards.id, id), eq(guards.ownerId, uid))).get();
+    if (!existing) return reply.code(404).send({ error: 'Wachgänger nicht gefunden' });
+    if (body.towerId != null && !ownsTower(app, body.towerId, uid)) {
+      return reply.code(400).send({ error: 'Turm gehört nicht zu deinem Bereich' });
+    }
+    app.db
+      .update(guards)
+      .set({
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.towerId !== undefined && { towerId: body.towerId }),
+        updatedAt: sql`CURRENT_TIMESTAMP`
+      })
+      .where(eq(guards.id, id))
+      .run();
+    recordAudit(req, 'guard.update', 'guard', id, body);
+    app.realtime.broadcast('guards-updated');
+    app.realtime.broadcast('towers-updated');
+    return { ok: true };
   });
 
   // Status ändern: Owner-Wachführer ODER der verknüpfte Benutzer selbst.

@@ -2,6 +2,8 @@
 // server.ts – Bootstrap: DB initialisieren, Public- (+ Admin-)Listener starten.
 // ============================================================
 
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { loadEnv } from './env.js';
 import { createDb, runMigrations } from './db/index.js';
 import { seedAdmin } from './db/seed.js';
@@ -20,8 +22,12 @@ async function main(): Promise<void> {
   const sessionStore = new SqliteSessionStore(sqlite);
   const deps: AppDeps = { db, sqlite, env, realtime, sessionStore };
 
-  const publicApp = await buildApp('public', deps);
-  const adminApp = await buildAdminApp(deps);
+  // SPA-Verzeichnisse: per Env überschreibbar (Docker), sonst relativ zum Entry.
+  const webDir = process.env.WEB_DIST ?? fileURLToPath(new URL('../../web/dist', import.meta.url));
+  const adminDir = process.env.ADMIN_DIST ?? fileURLToPath(new URL('../../admin/dist', import.meta.url));
+
+  const publicApp = await buildApp('public', deps, existsSync(webDir) ? webDir : null);
+  const adminApp = await buildAdminApp(deps, existsSync(adminDir) ? adminDir : null);
 
   await publicApp.listen({ host: env.host, port: env.port });
   await adminApp.listen({ host: env.adminBind, port: env.adminPort });

@@ -60,6 +60,10 @@ export const guardCreateSchema = z.object({
   latitude: latitude.optional(),
   longitude: longitude.optional()
 });
+export const guardUpdateSchema = z.object({
+  name: name.optional(),
+  towerId: z.number().int().positive().nullable().optional()
+});
 export const guardStatusSchema = z.object({ status: z.enum(GUARD_STATUSES) });
 export const positionSchema = z.object({ latitude, longitude });
 

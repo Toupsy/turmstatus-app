@@ -1,0 +1,354 @@
+:root {
+  --navy: #0d1b2a;
+  --deep: #10263b;
+  --paper: #14304a;
+  --line: #24425f;
+  --sea: #2ea6c9;
+  --sea-bright: #4fd0ef;
+  --green: #3ec98a;
+  --warn: #ffb347;
+  --coral: #ff5a4d;
+  --text: #e8f4f8;
+  --dim: #8ba9b8;
+  --radius: 10px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--navy);
+  color: var(--text);
+}
+a {
+  color: var(--sea-bright);
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+button:hover {
+  border-color: var(--sea);
+}
+button.primary {
+  background: var(--sea);
+  border-color: var(--sea);
+  color: #04121c;
+  font-weight: 600;
+}
+button.danger {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+button.ghost {
+  background: transparent;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+input,
+select,
+textarea {
+  font: inherit;
+  background: var(--navy);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.field {
+  margin-bottom: 12px;
+}
+
+header.app {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 18px;
+  background: var(--deep);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+header.app h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  color: var(--sea-bright);
+}
+header.app .spacer {
+  flex: 1;
+}
+.chip {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+
+nav.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 18px 0;
+  background: var(--deep);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+nav.tabs button {
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--dim);
+}
+nav.tabs button.active {
+  background: var(--navy);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+main {
+  padding: 18px;
+}
+.panel {
+  background: var(--deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.spread {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+th {
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.card .big {
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+.card .lbl {
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.pill.GREEN {
+  background: rgba(62, 201, 138, 0.18);
+  color: var(--green);
+}
+.pill.YELLOW {
+  background: rgba(255, 179, 71, 0.18);
+  color: var(--warn);
+}
+.pill.RED {
+  background: rgba(255, 90, 77, 0.18);
+  color: var(--coral);
+}
+.pill.muted {
+  background: var(--paper);
+  color: var(--dim);
+}
+.boat-warn {
+  color: var(--warn);
+  font-size: 0.8rem;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stepper button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.modal {
+  background: var(--deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.modal h3 {
+  margin: 0 0 14px;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.toasts {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 2000;
+}
+.toast {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 220px;
+}
+.toast.error {
+  border-left-color: var(--coral);
+}
+.toast.success {
+  border-left-color: var(--green);
+}
+.toast.info {
+  border-left-color: var(--sea);
+}
+
+.center-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.muted {
+  color: var(--dim);
+}
+.small {
+  font-size: 0.82rem;
+}
+
+/* Leaflet */
+#map {
+  height: 62vh;
+  min-height: 360px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+}
+.map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+.tower-label {
+  background: rgba(13, 27, 42, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--text);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.map-context {
+  position: absolute;
+  z-index: 1500;
+  background: var(--deep);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.map-context button {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  background: transparent;
+}
+.map-context button:hover {
+  background: var(--paper);
+}
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: var(--dim);
+  font-size: 0.82rem;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}

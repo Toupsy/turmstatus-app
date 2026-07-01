@@ -10,10 +10,12 @@ import type { FastifyInstance } from 'fastify';
 import { createBaseApp, type AppDeps } from './app.js';
 import { domainRoutes } from './routes/index.js';
 import { adminRoutes } from './routes/admin/index.js';
+import { registerSpa } from './plugins/static.js';
 
-export async function buildAdminApp(deps: AppDeps): Promise<FastifyInstance> {
+export async function buildAdminApp(deps: AppDeps, staticDir: string | null = null): Promise<FastifyInstance> {
   const app = await createBaseApp('admin', deps);
   await app.register(domainRoutes);
   await app.register(adminRoutes);
+  await registerSpa(app, staticDir);
   return app;
 }

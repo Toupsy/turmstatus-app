@@ -16,6 +16,7 @@ import { SqliteSessionStore } from './auth/session-store.js';
 import { authRoutes } from './routes/auth.js';
 import { configRoutes } from './routes/config.js';
 import { domainRoutes } from './routes/index.js';
+import { registerSpa } from './plugins/static.js';
 
 export interface AppDeps {
   db: Db;
@@ -73,9 +74,10 @@ export async function createBaseApp(variant: AppVariant, deps: AppDeps): Promise
   return app;
 }
 
-/** PUBLIC-Instanz: Basis + operative Domänen-Routen (KEINE Admin-Routen). */
-export async function buildApp(_variant: AppVariant, deps: AppDeps): Promise<FastifyInstance> {
+/** PUBLIC-Instanz: Basis + operative Domänen-Routen (KEINE Admin-Routen) + Web-SPA. */
+export async function buildApp(_variant: AppVariant, deps: AppDeps, staticDir: string | null = null): Promise<FastifyInstance> {
   const app = await createBaseApp('public', deps);
   await app.register(domainRoutes);
+  await registerSpa(app, staticDir);
   return app;
 }
