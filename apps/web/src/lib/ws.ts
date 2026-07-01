@@ -1,9 +1,11 @@
 import type { WsEventType } from '@turmstatus/shared';
 import { refreshTowers, refreshGuards, refreshBoats, refreshRequests, refreshSummary, refreshAll } from './stores.js';
+import { isDemoMode, subscribeDemoEvents } from './demo.js';
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let unsubscribeDemo: (() => void) | null = null;
 let stopped = false;
 
 function handle(type: WsEventType): void {
@@ -57,7 +59,13 @@ function connect(): void {
 
 export function startRealtime(): void {
   stopped = false;
-  connect();
+  if (isDemoMode()) {
+    // Demo: kein WebSocket – Mutationen (auch aus anderen Tabs/dem Admin-Panel)
+    // kommen als storage-/CustomEvents und triggern dieselben Refreshes.
+    if (!unsubscribeDemo) unsubscribeDemo = subscribeDemoEvents((events) => events.forEach(handle));
+  } else {
+    connect();
+  }
   // 30-Sekunden-Polling-Fallback (falls WS blockiert ist).
   if (!pollTimer) pollTimer = setInterval(() => void refreshAll(), 30000);
 }
@@ -69,4 +77,6 @@ export function stopRealtime(): void {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
+  unsubscribeDemo?.();
+  unsubscribeDemo = null;
 }

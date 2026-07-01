@@ -9,7 +9,8 @@
     "./config": "./src/config.ts",
     "./schemas": "./src/schemas.ts",
     "./types": "./src/types.ts",
-    "./ids": "./src/ids.ts"
+    "./ids": "./src/ids.ts",
+    "./demo": "./src/demo/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -b"

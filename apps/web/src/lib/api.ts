@@ -1,3 +1,5 @@
+import { isDemoMode, demoFetch } from './demo.js';
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
@@ -9,6 +11,16 @@ export class ApiError extends Error {
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
+  // Demo-Modus (Cloudflare-Preview): API im Browser simulieren statt fetchen.
+  if (isDemoMode()) {
+    const { status, data } = await demoFetch(method, url, body);
+    if (status >= 400) {
+      const message = (data as { error?: string })?.error ?? 'Fehler';
+      throw new ApiError(message, status, data);
+    }
+    return data as T;
+  }
+
   const res = await fetch(url, {
     method,
     credentials: 'include',

@@ -51,6 +51,8 @@ config.ts   Enums/Labels (Rollen/Status/Gründe) + Karten-Defaults (DLRG Dahme)
 schemas.ts  zod-Schemas für ALLE Request-Bodies (+ abgeleitete Typen)
 types.ts    DTOs (TowerView/GuardView/BoatView/RequestView/UserDto/...)
 ids.ts      parsePositiveInt (strikte Route-ID-Validierung)
+demo/       Demo-Modus-Kern (Seed + handleDemoRequest = API-Simulation für die Cloudflare-Preview);
+            NUR via Subpfad `@turmstatus/shared/demo` (bewusst nicht in index.ts → nicht im API-Bundle)
 ```
 Server UND beide SPAs importieren daraus → **keine Duplikat-Logik** mehr.
 
@@ -76,14 +78,21 @@ migrations/      Drizzle-kit-SQL (beim Start via runMigrations ausgeführt)
 
 **`apps/web/src/`** (öffentliche Svelte-SPA):
 ```
-lib/api.ts     fetch-Wrapper (credentials:'include'), ApiError
+lib/api.ts     fetch-Wrapper (credentials:'include'), ApiError; im Demo-Modus → lib/demo.ts statt Netz
+lib/demo.ts    Demo-Glue: isDemoMode (workers.dev/?demo), Demo-DB in localStorage, Rolle pro Tab (sessionStorage), Tab-Broadcast via storage-Event
 lib/stores.ts  Svelte-Stores (config/currentUser/towers/guards/boats/requests/summary/team) + refresh* + Toasts + Rollen-Helfer
-lib/ws.ts      WebSocket-Client → gezielte refresh je Event + 30-s-Polling-Fallback
+lib/ws.ts      WebSocket-Client → gezielte refresh je Event + 30-s-Polling-Fallback; Demo: storage-Events statt WS
 lib/util.ts    labelOf / fmtTime (UTC→lokal)
 App.svelte     Auth-Gate + Tabs (Karte/Dashboard/Anfragen/Personal) + startet Realtime
-components/     Login, Header, MapView (Leaflet), Dashboard, Requests, Team, *Modal, Toasts
+components/     Login, Header (+ Demo-Rollen-Dropdown), MapView (Leaflet), Dashboard, Requests, Team, *Modal, Toasts
 ```
-**`apps/admin/src/`** (interne Admin-SPA): Login, Users, Templates (+ Vorlagen-Karte), Audit.
+**`apps/admin/src/`** (interne Admin-SPA): Login, Users, Templates (+ Vorlagen-Karte), Audit;
+`lib/demo.ts` = Demo-Glue mit fester Hauptwache-Session (gleiche localStorage-DB wie Web).
+
+**Cloudflare-Preview (Demo ohne Backend):** `worker/index.js` + `wrangler.toml` liefern die in
+`dist-preview/` zusammengesetzten SPA-Builds aus (`/` = Web, `/admin/` = Admin);
+`.github/workflows/deploy-preview.yml` deployt pro PR (`turmstatus-preview-pr-N`) und für `main`
+(`turmstatus-demo`). Details + Fallen: `docs/DEMO_PREVIEW.md`.
 
 ## Datenmodell (SQLite via Drizzle, `apps/api/src/db/schema.ts`)
 ```
@@ -147,6 +156,10 @@ sein Eigenes) · `WACHGAENGER` (darf `-1` beantragen) · `BOOTSFUEHRER` (wie WG 
 - **Zeit:** SQLite-Zeitstempel sind UTC; `fmtTime` formatiert lokal.
 - **shared-Import:** Wird von tsup ins API-Bundle gezogen (`noExternal`) und von Vite direkt aus dem
   Quelltext konsumiert – kein separater Build von `packages/shared` nötig.
+- **Demo-Modus pflegen:** Neue/geänderte API-Route, die eine SPA aufruft → auch in
+  `packages/shared/src/demo/handler.ts` nachziehen (sonst 404 in der Cloudflare-Preview).
+  `shared/demo` bleibt DOM-frei und wird NICHT aus `shared/src/index.ts` re-exportiert
+  (sonst landet die Demo-Logik im API-Bundle); Import nur via `@turmstatus/shared/demo`.
 
 ## Testing
 `npm test` → **Vitest**:

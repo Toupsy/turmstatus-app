@@ -2,6 +2,31 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Cloudflare-PR-Preview mit Demo-Modus & Rollen-Umschalter
+
+PRs bekommen (wie beim Wachplan-Generator) automatisch eine öffentliche Preview-URL auf
+Cloudflare Workers – als **reine Demo ohne Backend**: Der Worker liefert nur die gebauten SPAs
+aus (`/` = Web, `/admin/` = Admin-SPA), die auf `*.workers.dev` (oder mit `?demo` in der URL) in
+einen **clientseitig simulierten API-Modus** schalten.
+
+- **Demo-Kern** `packages/shared/src/demo/` (DOM-frei, via `@turmstatus/shared/demo`):
+  Seed-Datensatz (2 Mandanten + Admin), `handleDemoRequest()` bildet ALLE API-Routen inkl.
+  Rollen-Gates, Mandanten-Scope, `-1`/K-Fahrt-Workflow, Team- und Admin-Endpunkte über einer
+  JSON-„DB" nach – mit denselben zod-Schemas und derselben Statuslogik wie der echte Server.
+  Vitest-Abdeckung in `demo.test.ts`.
+- **Browser-Glue** (`apps/web/src/lib/demo.ts`, `apps/admin/src/lib/demo.ts`): Demo-DB in
+  `localStorage` (beide SPAs teilen sie), aktive **Rolle pro Tab** in `sessionStorage`.
+- **Rollen-Umschalter** im Header (nur Demo): Dropdown Hauptwache (Admin) / Wachführer /
+  Wachgänger / Bootsführer + „Demo zurücksetzen". Beim Admin zusätzlich Button zum Admin-Panel
+  (`/admin/`, lädt ohne Login als Hauptwache).
+- **Live wie im Echtbetrieb:** Mutationen broadcasten die WS-Eventtypen per `storage`-Event an
+  andere Tabs (und per CustomEvent im eigenen) → zwei Tabs mit verschiedenen Rollen sehen sich
+  gegenseitig live (z.B. WG beantragt `-1`, WF-Tab zeigt die Anfrage sofort).
+- **Deploy:** `.github/workflows/deploy-preview.yml` baut beide SPAs (Admin mit `--base=/admin/`),
+  setzt `dist-preview/` zusammen, deployt per wrangler (`turmstatus-preview-pr-N`, main →
+  `turmstatus-demo`) und kommentiert die URL in den PR. Secrets: `CLOUDFLARE_API_TOKEN`,
+  `CLOUDFLARE_ACCOUNT_ID`. Details: `docs/DEMO_PREVIEW.md`.
+
 ## Kontrollfahrten (K-Fahrt): Bootsführer → Wachführer
 
 Der Kontrollfahrten-Workflow ist zurück, jetzt in den bestehenden Anfragen-Bereich integriert
