@@ -1,0 +1,20 @@
+{
+  "name": "@turmstatus/shared",
+  "version": "1.16.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./status": "./src/status.ts",
+    "./config": "./src/config.ts",
+    "./schemas": "./src/schemas.ts",
+    "./types": "./src/types.ts",
+    "./ids": "./src/ids.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}
