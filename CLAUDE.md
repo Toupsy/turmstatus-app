@@ -92,18 +92,27 @@ users   id, username(uniq), password_hash, full_name, role[HAUPTWACHE|WACHFUEHRE
 towers  id, name, call_sign, latitude, longitude, required_staff(Basis, Default 2), present_staff(manuelle Ist-Besetzung), owner_id, created_at
 guards  id, user_id, tower_id, name, status[IN_AREA|MINUS_ONE|DEPLOYED|BREAK], latitude, longitude, owner_id, updated_at
 boats   id, name, call_sign, tower_id, status[AT_TOWER|PATROL|DEPLOYED|OUT_OF_SERVICE], latitude, longitude, owner_id, updated_at
-minus_one_requests  id, guard_id, requested_by, reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER], note,
+minus_one_requests  id, guard_id, requested_by, kind[MINUS_ONE|K_FAHRT], reason[PAUSE|TOILET|CATERING|MATERIAL|OTHER|null], note,
                     status[PENDING|APPROVED|REJECTED|RETURNED], rejection_reason, created_at, decided_at, decided_by, returned_at
 audit_log  id, user_id, action, entity_type, entity_id, details(JSON), ip_address, timestamp
 tower_templates / boat_templates   Admin-Vorlagen, bei WF-Anlage in dessen Scope geklont
 sessions   sid, sess(JSON), expire (Session-Store)
 ```
-Gegenüber dem alten Stack **entfallen**: `control_trip_requests` (Kontrollfahrten) und die
-Crypto-Schicht (waren halbfertig/ungenutzt).
+Die Tabelle `minus_one_requests` trägt **beide** Anfrage-Arten (`kind`): klassische `-1`
+(`reason` Pflicht) und `K_FAHRT` (Kontrollfahrt, `reason=null`). Die frühere separate Tabelle
+`control_trip_requests` sowie die Crypto-Schicht bleiben **entfallen**.
+
+**Kontrollfahrt (K-Fahrt):** Bootsführer/Wachführer beantragen (`POST /api/requests/k-fahrt`,
+`kind=K_FAHRT`, Status `PENDING`). Der **Wachführer setzt** sie aktiv über
+`POST /api/requests/:id/set-k-fahrt` (Status → `APPROVED`) – **nicht** über `…/approve` (das lehnt
+K-Fahrten mit 409 ab). Beenden über `…/return` (Status `RETURNED`; anders als `-1` ohne
+Guard-Status-Änderung). Jede **aktive** K-Fahrt (`APPROVED`) reduziert die Ist-Besetzung des Turms
+ihres Wachgängers um `K_FAHRT_STAFF_REDUCTION` (=2) – rein abgeleitet in `buildTowerViews`.
 
 **Turmfarbe (`shared/status.ts`):** `currentStaff` = Wachgänger `IN_AREA` (`guardStaff`) **+**
-`towers.present_staff` (manuell gemeldete Anwesende). `GREEN` ≥ effektiver Soll, `YELLOW` ≥ 50 %,
-sonst `RED` – gegen die **effektive** Sollstärke.
+`towers.present_staff` (manuell gemeldete Anwesende) **−** 2 je aktiver K-Fahrt (min. 0). `GREEN` ≥
+effektiver Soll, `YELLOW` ≥ 50 %, sonst `RED` – gegen die **effektive** Sollstärke. `GET /api/towers`
+liefert zusätzlich `activeKFahrten` + `kFahrtReduction`.
 **Boots-abhängige Sollstärke:** Basis `required_staff` (Default 2); pro Boot `AT_TOWER` **+1**
 (2 WF + 1 BF), `PATROL`/`DEPLOYED` **−1** (Boot weg → Warnung), `OUT_OF_SERVICE` **±0**;
 `effectiveRequiredStaff = max(1, Basis + Σ Delta)`. `GET /api/towers` liefert `effectiveRequiredStaff`
@@ -118,7 +127,8 @@ Admin → `{all:true}`; WF → eigene `id`; WG/BF → `owner_id` ihres WF. Alle 
 > (`is_admin`, Rolle HAUPTWACHE) ist **reine Ansicht** + Kontoverwaltung (nur über den Admin-Listener).
 
 **Rollen:** `HAUPTWACHE` (App-Admin, `is_admin`) · `WACHFUEHRER` (Mandant, verwaltet & genehmigt
-sein Eigenes) · `WACHGAENGER` (darf `-1` beantragen) · `BOOTSFUEHRER` (wie WG + darf Boot-Status setzen).
+sein Eigenes) · `WACHGAENGER` (darf `-1` beantragen) · `BOOTSFUEHRER` (wie WG + darf Boot-Status setzen
++ K-Fahrt beantragen).
 
 ## Konventionen & Fallen
 - **Migrationen:** Schema in `db/schema.ts` ändern → `npm run db:generate` (drizzle-kit) erzeugt

@@ -2,7 +2,7 @@
 // types.ts – DTOs, die die API zurückliefert (vom Frontend konsumiert).
 // ============================================================
 
-import type { Role, GuardStatus, BoatStatus, TowerStatus, RequestStatus, Reason } from './config.js';
+import type { Role, GuardStatus, BoatStatus, TowerStatus, RequestStatus, Reason, RequestKind } from './config.js';
 
 export interface CurrentUser {
   userId: number;
@@ -45,6 +45,8 @@ export interface TowerView {
   boatsAway: number;
   boatsBroken: number;
   boatWarning: boolean;
+  activeKFahrten: number; // gesetzte Kontrollfahrten dieses Turms
+  kFahrtReduction: number; // dadurch abgezogene Ist-Besetzung (2 pro K-Fahrt)
 }
 
 export interface GuardView {
@@ -81,7 +83,8 @@ export interface RequestView {
   towerName: string | null;
   requestedBy: number;
   requestedByName: string | null;
-  reason: Reason;
+  kind: RequestKind;
+  reason: Reason | null;
   note: string | null;
   status: RequestStatus;
   rejectionReason: string | null;

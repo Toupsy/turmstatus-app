@@ -8,6 +8,7 @@ import {
   deriveTowerStatus,
   effectiveRequiredStaff,
   summarizeBoats,
+  K_FAHRT_STAFF_REDUCTION,
   type TowerView,
   type GuardView,
   type BoatView,
@@ -15,7 +16,7 @@ import {
   type BoatStatus
 } from '@turmstatus/shared';
 import type { Db } from '../db/index.js';
-import { towers, guards, boats } from '../db/schema.js';
+import { towers, guards, boats, minusOneRequests } from '../db/schema.js';
 import { scopeWhere } from './scope.js';
 import type { ViewScope } from '../types/fastify.js';
 
@@ -26,6 +27,21 @@ export function buildTowerViews(db: Db, scope: ViewScope): TowerView[] {
     .select()
     .from(guards)
     .where(scopeWhere(scope, guards.ownerId, eq(guards.status, 'IN_AREA')))
+    .all();
+
+  // Aktive (gesetzte) Kontrollfahrten → Turm des jeweiligen Wachgängers.
+  const kFahrtRows = db
+    .select({ towerId: guards.towerId })
+    .from(minusOneRequests)
+    .innerJoin(guards, eq(minusOneRequests.guardId, guards.id))
+    .where(
+      scopeWhere(
+        scope,
+        guards.ownerId,
+        eq(minusOneRequests.kind, 'K_FAHRT'),
+        eq(minusOneRequests.status, 'APPROVED')
+      )
+    )
     .all();
 
   const boatsByTower = new Map<number, BoatStatus[]>();
@@ -40,12 +56,19 @@ export function buildTowerViews(db: Db, scope: ViewScope): TowerView[] {
     if (g.towerId == null) continue;
     guardStaffByTower.set(g.towerId, (guardStaffByTower.get(g.towerId) ?? 0) + 1);
   }
+  const kFahrtByTower = new Map<number, number>();
+  for (const k of kFahrtRows) {
+    if (k.towerId == null) continue;
+    kFahrtByTower.set(k.towerId, (kFahrtByTower.get(k.towerId) ?? 0) + 1);
+  }
 
   return towerRows.map((t): TowerView => {
     const boatStatuses = boatsByTower.get(t.id) ?? [];
     const guardStaff = guardStaffByTower.get(t.id) ?? 0;
     const presentStaff = t.presentStaff;
-    const currentStaff = guardStaff + presentStaff;
+    const activeKFahrten = kFahrtByTower.get(t.id) ?? 0;
+    const kFahrtReduction = activeKFahrten * K_FAHRT_STAFF_REDUCTION;
+    const currentStaff = Math.max(0, guardStaff + presentStaff - kFahrtReduction);
     const effective = effectiveRequiredStaff(t.requiredStaff, boatStatuses);
     const summary = summarizeBoats(boatStatuses);
     return {
@@ -65,7 +88,9 @@ export function buildTowerViews(db: Db, scope: ViewScope): TowerView[] {
       boatsAtTower: summary.atTower,
       boatsAway: summary.away,
       boatsBroken: summary.broken,
-      boatWarning: summary.warning
+      boatWarning: summary.warning,
+      activeKFahrten,
+      kFahrtReduction
     };
   });
 }

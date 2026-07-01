@@ -11,6 +11,12 @@
   $: pending = $requests.filter((r) => r.status === 'PENDING');
   $: history = $requests.filter((r) => r.status !== 'PENDING');
 
+  // Anzeige-Text pro Anfrage: Kontrollfahrt oder -1-Grund.
+  function describe(r: RequestView): string {
+    if (r.kind === 'K_FAHRT') return labelOf($config, 'requestKind', 'K_FAHRT');
+    return r.reason ? labelOf($config, 'reasons', r.reason) : '–';
+  }
+
   async function act(url: string, ok: string, body?: unknown) {
     try {
       await apiPost(url, body);
@@ -29,20 +35,26 @@
 </script>
 
 <div class="panel">
-  <h2>Offene -1-Anfragen</h2>
+  <h2>Offene Anfragen</h2>
   <table>
-    <thead><tr><th>Wachgänger</th><th>Turm</th><th>Grund</th><th>Notiz</th><th>Seit</th>{#if $canManage}<th></th>{/if}</tr></thead>
+    <thead><tr><th>Wachgänger</th><th>Turm</th><th>Art / Grund</th><th>Notiz</th><th>Seit</th>{#if $canManage}<th></th>{/if}</tr></thead>
     <tbody>
       {#each pending as r (r.id)}
         <tr>
           <td>{r.guardName ?? '–'}</td>
           <td class="muted">{r.towerName ?? '–'}</td>
-          <td>{labelOf($config, 'reasons', r.reason)}</td>
+          <td>
+            {#if r.kind === 'K_FAHRT'}<span class="pill YELLOW">{describe(r)}</span>{:else}{describe(r)}{/if}
+          </td>
           <td class="muted">{r.note ?? '–'}</td>
           <td class="muted small">{fmtTime(r.createdAt)}</td>
           {#if $canManage}
             <td class="row">
-              <button class="primary small" on:click={() => act(`/api/requests/${r.id}/approve`, 'Genehmigt')}>Genehmigen</button>
+              {#if r.kind === 'K_FAHRT'}
+                <button class="primary small" on:click={() => act(`/api/requests/${r.id}/set-k-fahrt`, 'K-Fahrt gesetzt')}>K-Fahrt setzen</button>
+              {:else}
+                <button class="primary small" on:click={() => act(`/api/requests/${r.id}/approve`, 'Genehmigt')}>Genehmigen</button>
+              {/if}
               <button class="danger small" on:click={() => (rejecting = r)}>Ablehnen</button>
             </td>
           {/if}
@@ -61,7 +73,7 @@
       {#each history as r (r.id)}
         <tr>
           <td>{r.guardName ?? '–'}</td>
-          <td>{labelOf($config, 'reasons', r.reason)}</td>
+          <td>{describe(r)}</td>
           <td>
             <span class="pill {r.status === 'APPROVED' ? 'YELLOW' : r.status === 'RETURNED' ? 'GREEN' : 'muted'}">
               {labelOf($config, 'requestStatus', r.status)}
@@ -70,7 +82,11 @@
           <td class="muted small">{fmtTime(r.decidedAt ?? r.createdAt)}</td>
           <td>
             {#if r.status === 'APPROVED'}
-              <button class="ghost small" on:click={() => act(`/api/requests/${r.id}/return`, '+1 zurückgemeldet')}>+1 Rückkehr</button>
+              {#if r.kind === 'K_FAHRT'}
+                <button class="ghost small" on:click={() => act(`/api/requests/${r.id}/return`, 'K-Fahrt beendet')}>K-Fahrt beenden</button>
+              {:else}
+                <button class="ghost small" on:click={() => act(`/api/requests/${r.id}/return`, '+1 zurückgemeldet')}>+1 Rückkehr</button>
+              {/if}
             {/if}
           </td>
         </tr>

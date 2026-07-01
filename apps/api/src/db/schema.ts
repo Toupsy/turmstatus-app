@@ -80,7 +80,8 @@ export const minusOneRequests = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     guardId: integer('guard_id').notNull(),
     requestedBy: integer('requested_by').notNull(),
-    reason: text('reason').notNull(),
+    kind: text('kind').notNull().default('MINUS_ONE'), // MINUS_ONE | K_FAHRT
+    reason: text('reason'), // Pflicht bei -1, null bei K-Fahrt
     note: text('note'),
     status: text('status').notNull().default('PENDING'),
     rejectionReason: text('rejection_reason'),

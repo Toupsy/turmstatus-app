@@ -21,6 +21,13 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 export const REASONS = ['PAUSE', 'TOILET', 'CATERING', 'MATERIAL', 'OTHER'] as const;
 export type Reason = (typeof REASONS)[number];
 
+// Art einer Anfrage: klassische -1 oder Kontrollfahrt (K-Fahrt).
+export const REQUEST_KINDS = ['MINUS_ONE', 'K_FAHRT'] as const;
+export type RequestKind = (typeof REQUEST_KINDS)[number];
+
+// Eine gesetzte (aktive) Kontrollfahrt reduziert die Ist-Besetzung des Turms um 2 WG.
+export const K_FAHRT_STAFF_REDUCTION = 2;
+
 export const config = {
   roles: ROLES,
   roleLabels: {
@@ -59,6 +66,10 @@ export const config = {
     MATERIAL: 'Material',
     OTHER: 'Sonstiges'
   } satisfies Record<Reason, string>,
+  requestKind: {
+    MINUS_ONE: '-1',
+    K_FAHRT: 'Kontrollfahrt'
+  } satisfies Record<RequestKind, string>,
   map: {
     center: [54.21449, 11.08967] as [number, number], // DLRG Hauptwache Dahme
     zoom: 15,
