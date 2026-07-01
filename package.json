@@ -1,6 +1,6 @@
 {
   "name": "turmstatus-app",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "private": true,
   "description": "Turmstatus – digitales Wach- und Statussystem für Wasserrettung (Fastify + SQLite + Svelte, TypeScript-Monorepo)",
   "type": "module",
