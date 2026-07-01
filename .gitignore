@@ -12,6 +12,9 @@ packages/*/dist/
 # Laufzeit-Daten (SQLite-DB, WAL)
 data/
 
+# Cloudflare Wrangler
+.wrangler/
+
 # Env / Secrets
 .env
 .env.local

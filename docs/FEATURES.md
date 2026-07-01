@@ -2,6 +2,28 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Cloudflare Worker – Preview-/Demo-Modus (Neubau-Variante)
+
+Der frühere Cloudflare-Preview (aus dem alten Vanilla-Stack) ist zurück, neu aufgebaut für das
+TypeScript-Monorepo. Da die echte App (**Fastify + `better-sqlite3`**, natives Node-Modul) **nicht**
+auf der Workers-Runtime läuft, liefert der Worker nur **statische Assets + einen Demo-Mock**:
+
+- **`wrangler.jsonc`** (Repo-Root): `main = worker/index.js`, Assets aus `apps/web/dist`,
+  `not_found_handling: single-page-application`, `run_worker_first: ["/api/*"]` (nur `/api/*`
+  erreicht den Worker, der Rest wird als statisches Asset ausgeliefert).
+- **`worker/index.js`**: beantwortet alle `GET /api/*` aus einem statischen In-Memory-Demodatensatz
+  (4 Türme mit versch. Status/Boots-Lage/K-Fahrt, 7 Wachgänger, 2 Boote, Anfragen, Team). `GET
+  /api/auth/me` liefert einen **Demo-Wachführer** → **kein Login**. Schreibende Requests → **403**
+  („Demo-Modus"). Der WebSocket `/api/ws` wird angenommen und still gehalten (kein Reconnect-Sturm);
+  der 30-s-Polling-Fallback der SPA bleibt aktiv. **Kein** Eingriff in den App-Code nötig.
+- **Deploy:** `npm run deploy` (baut Web-SPA + `wrangler deploy`) bzw. via **Cloudflare Workers
+  Builds** (Build `npm run build`, Deploy `npx wrangler deploy`) – dort authentifiziert die
+  Git-Integration, **kein API-Token nötig**. Für Deploys außerhalb (eigener CI-Workflow):
+  `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`. Details: `docs/CLOUDFLARE_WORKER.md`.
+- **Behebt** außerdem den Deploy-Fehler „application detection logic … root of a workspace": im
+  Monorepo-Root fehlte eine `wrangler.jsonc`, sodass `wrangler deploy` nicht wusste, *was* zu
+  deployen ist.
+
 ## Kontrollfahrten (K-Fahrt): Bootsführer → Wachführer
 
 Der Kontrollfahrten-Workflow ist zurück, jetzt in den bestehenden Anfragen-Bereich integriert

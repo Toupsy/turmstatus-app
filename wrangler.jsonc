@@ -1,0 +1,18 @@
+{
+  // Cloudflare Worker – Preview-/Demo-Deployment von Turmstatus.
+  // Liefert die gebaute Web-SPA (apps/web/dist) statisch aus; nur `/api/*`
+  // erreicht den Worker (Demo-Mock, siehe worker/index.js).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "turmstatus-preview",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-06-01",
+  "assets": {
+    "directory": "./apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

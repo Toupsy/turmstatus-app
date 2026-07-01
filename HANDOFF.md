@@ -13,8 +13,15 @@ Statusdokument zum Projekt **Turmstatus** (digitales Wach- und Statussystem Wass
 
 **Beibehalten:** Mandanten-Modell (owner_id-Isolation pro Wachführer), Demo-Vorlagen, boots-
 abhängige Sollstärke, manuelle Ist-Besetzung, `-1/+1`-Workflow, Audit-Log, Docker/GHCR/Semantic-Release.
-**Weggelassen:** Cloudflare-Preview-Modus, ungenutzte Crypto-Schicht sowie die gesamte
-SQLite-Multiprozess-Härtung (dank Einzelprozess + WAL nicht mehr nötig).
+**Weggelassen:** ungenutzte Crypto-Schicht sowie die gesamte SQLite-Multiprozess-Härtung (dank
+Einzelprozess + WAL nicht mehr nötig).
+
+**Neu (Cloudflare Worker – Preview/Demo):** `wrangler.jsonc` (Root) + `worker/index.js` liefern die
+gebaute Web-SPA statisch aus und mocken `/api/*` mit einem In-Memory-Demodatensatz (Demo-Wachführer,
+**kein Login**, Schreib-Requests → 403). Die echte App (better-sqlite3, nativ) läuft nicht auf
+Workers – daher nur Demo. Deploy via `npm run deploy` oder Cloudflare Workers Builds
+(`npx wrangler deploy`). Behebt den bisherigen Deploy-Fehler „application detection … workspace root"
+(fehlende `wrangler.jsonc`). Details: `docs/CLOUDFLARE_WORKER.md`.
 
 **Neu (K-Fahrt/Kontrollfahrten):** Bootsführer/Wachführer beantragen eine Kontrollfahrt
 (`kind=K_FAHRT` in `minus_one_requests`); der **Wachführer setzt** sie über

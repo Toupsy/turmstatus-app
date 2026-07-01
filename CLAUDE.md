@@ -163,6 +163,16 @@ Multi-Stage-`Dockerfile` (baut SPAs + API, `npm prune --omit=dev`), **ein** Cont
 `127.0.0.1` gemappt. CI: `docker.yml` (Multi-Arch → GHCR), `release.yml` (Semantic-Release).
 `GET /api/version` → `{ version, latest, updateAvailable, releaseUrl }` (GitHub-Release, 6 h gecacht).
 
+**Cloudflare Worker (nur Preview/Demo):** `wrangler.jsonc` (Root) + `worker/index.js` liefern die
+gebaute **Web-SPA** (`apps/web/dist`) statisch aus und mocken `/api/*` mit einem In-Memory-
+Demodatensatz (Demo-Wachführer → **kein Login**, Schreib-Requests → 403, WS still offen). Nur
+`/api/*` erreicht den Worker (`assets.run_worker_first`), Rest = statisches Asset + SPA-Fallback.
+> **Falle:** Die **echte** App (Fastify + `better-sqlite3`, natives Modul) läuft **nicht** auf der
+> Workers-Runtime – der Worker ist bewusst nur ein Demo-Frontend, keine funktionale App. `APP_CONFIG`
+> in `worker/index.js` spiegelt `packages/shared/src/config.ts` (dependency-frei) → bei Config-
+> Änderungen nachziehen. Deploy: `npm run deploy` oder Cloudflare Workers Builds (`npx wrangler
+> deploy`, per Git-Integration ohne Token). Details: `docs/CLOUDFLARE_WORKER.md`.
+
 ## Doku aktuell halten (Wartungsvertrag)
 | Änderung | Datei |
 |---|---|

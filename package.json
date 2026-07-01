@@ -17,7 +17,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --pretty",
-    "db:generate": "npm run db:generate --workspace @turmstatus/api"
+    "db:generate": "npm run db:generate --workspace @turmstatus/api",
+    "deploy": "npm run build --workspace @turmstatus/web && wrangler deploy",
+    "deploy:dev": "npm run build --workspace @turmstatus/web && wrangler dev"
   },
   "keywords": [
     "DLRG",
