@@ -86,6 +86,12 @@ export const minusOneSchema = z.object({
 });
 export const rejectSchema = z.object({ rejectionReason: z.string().trim().max(500).optional() });
 
+// --- Kontrollfahrt (K-Fahrt): Bootsführer beantragt, Wachführer setzt ---
+export const kFahrtRequestSchema = z.object({
+  guardId: z.number().int().positive(),
+  note: z.string().trim().max(500).optional()
+});
+
 // --- Team (Wachführer verwaltet eigenes Personal) ---
 export const teamMemberCreateSchema = z.object({
   username,
@@ -142,5 +148,6 @@ export type TowerCreateInput = z.infer<typeof towerCreateSchema>;
 export type BoatCreateInput = z.infer<typeof boatCreateSchema>;
 export type GuardCreateInput = z.infer<typeof guardCreateSchema>;
 export type MinusOneInput = z.infer<typeof minusOneSchema>;
+export type KFahrtRequestInput = z.infer<typeof kFahrtRequestSchema>;
 export type TeamMemberCreateInput = z.infer<typeof teamMemberCreateSchema>;
 export type AdminUserCreateInput = z.infer<typeof adminUserCreateSchema>;

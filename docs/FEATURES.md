@@ -2,6 +2,28 @@
 
 > Historie funktionaler Änderungen. Stabiles Wissen → CLAUDE.md, aktueller Stand → HANDOFF.md.
 
+## Kontrollfahrten (K-Fahrt): Bootsführer → Wachführer
+
+Der Kontrollfahrten-Workflow ist zurück, jetzt in den bestehenden Anfragen-Bereich integriert
+(gemeinsame Tabelle `minus_one_requests` mit neuer Spalte `kind` = `MINUS_ONE | K_FAHRT`).
+
+- **Bootsführer** (und Wachführer) können neben `-1` eine **K-Fahrt** für ihren Wachgänger
+  beantragen (`POST /api/requests/k-fahrt`, Button „K-Fahrt" in der Wachgänger-Liste). Kein Grund
+  nötig, optionale Notiz. Doppelte offene/aktive K-Fahrten pro Wachgänger werden geblockt (409).
+- **Der Wachführer setzt die K-Fahrt aktiv** (`POST /api/requests/:id/set-k-fahrt`, Button
+  „K-Fahrt setzen"). Bewusst **nicht** über die normale Genehmigung – `POST …/approve` lehnt
+  K-Fahrten mit 409 ab.
+- **Beim Setzen wird der Turm automatisch um 2 WG reduziert** (`K_FAHRT_STAFF_REDUCTION`, in
+  `shared/config.ts`). Die Reduktion ist rein abgeleitet (`buildTowerViews`): jede aktive K-Fahrt
+  zieht 2 von der Ist-Besetzung des Turms des Wachgängers ab (min. 0) und beeinflusst so die
+  Turmfarbe. `GET /api/towers` liefert dazu `activeKFahrten` + `kFahrtReduction`.
+- **Beenden** über den bestehenden `+1`-/Rückkehr-Endpunkt (`POST /api/requests/:id/return`,
+  Button „K-Fahrt beenden") → Status `RETURNED`, Reduktion entfällt. Anders als bei `-1` wird dabei
+  kein Wachgänger-Status verändert.
+- Owner-/Scope-Prüfungen wie bei `-1`; Broadcasts `requests-updated` + `towers-updated`, Audit-Log.
+- Tests: `apps/api/test/domain.test.ts` deckt Beantragen, „setzen ≠ genehmigen", 2-WG-Reduktion,
+  Doppel-Block und Beenden ab.
+
 ## Neubau: Full-TypeScript (Fastify + Drizzle + Svelte)
 
 Die App wurde vom alten Stack (Express + SQLite + Vanilla JS) **komplett neu gebaut**, um sie

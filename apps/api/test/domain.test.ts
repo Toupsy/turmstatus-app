@@ -102,6 +102,55 @@ describe('Boots-abhängige Sollstärke', () => {
   });
 });
 
+describe('K-Fahrt (Kontrollfahrt)', () => {
+  let bf: ReturnType<typeof client>;
+  let kfId: number;
+  let baselineStaff: number;
+
+  it('Bootsführer beantragt K-Fahrt; WF setzt sie → Turm um 2 WG reduziert (nicht durch genehmigen)', async () => {
+    expect(
+      (await wf1.post('/api/team/members', { username: 'bf1', password: 'passwort1', role: 'BOOTSFUEHRER' })).statusCode
+    ).toBe(201);
+    bf = client(app.publicApp);
+    expect((await bf.post('/api/auth/login', { username: 'bf1', password: 'passwort1' })).statusCode).toBe(200);
+
+    baselineStaff = (await wf1.get('/api/towers')).json()[0].currentStaff;
+
+    const req = await bf.post('/api/requests/k-fahrt', { guardId: g1Id });
+    expect(req.statusCode).toBe(201);
+    kfId = req.json().id;
+
+    // Solange nicht gesetzt: keine Reduktion.
+    let t = (await wf1.get('/api/towers')).json()[0];
+    expect(t.activeKFahrten).toBe(0);
+    expect(t.currentStaff).toBe(baselineStaff);
+
+    // K-Fahrt lässt sich NICHT über die normale Genehmigung setzen.
+    expect((await wf1.post(`/api/requests/${kfId}/approve`)).statusCode).toBe(409);
+    // Bootsführer darf nicht selbst setzen.
+    expect((await bf.post(`/api/requests/${kfId}/set-k-fahrt`)).statusCode).toBe(403);
+
+    // WF setzt die K-Fahrt → Reduktion um 2 WG.
+    expect((await wf1.post(`/api/requests/${kfId}/set-k-fahrt`)).statusCode).toBe(200);
+    t = (await wf1.get('/api/towers')).json()[0];
+    expect(t.activeKFahrten).toBe(1);
+    expect(t.kFahrtReduction).toBe(2);
+    expect(t.currentStaff).toBe(Math.max(0, baselineStaff - 2));
+  });
+
+  it('doppelte offene/aktive K-Fahrt wird abgelehnt (409)', async () => {
+    const dup = await bf.post('/api/requests/k-fahrt', { guardId: g1Id });
+    expect(dup.statusCode).toBe(409);
+  });
+
+  it('WF beendet die K-Fahrt → Reduktion entfällt wieder', async () => {
+    expect((await wf1.post(`/api/requests/${kfId}/return`)).statusCode).toBe(200);
+    const t = (await wf1.get('/api/towers')).json()[0];
+    expect(t.activeKFahrten).toBe(0);
+    expect(t.currentStaff).toBe(baselineStaff);
+  });
+});
+
 describe('Mandanten-Isolation', () => {
   it('WF2 sieht WF1-Objekte nicht und kann sie nicht ändern', async () => {
     expect((await wf2.get('/api/towers')).json()).toHaveLength(0);

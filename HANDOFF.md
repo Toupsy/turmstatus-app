@@ -13,8 +13,14 @@ Statusdokument zum Projekt **Turmstatus** (digitales Wach- und Statussystem Wass
 
 **Beibehalten:** Mandanten-Modell (owner_id-Isolation pro Wachführer), Demo-Vorlagen, boots-
 abhängige Sollstärke, manuelle Ist-Besetzung, `-1/+1`-Workflow, Audit-Log, Docker/GHCR/Semantic-Release.
-**Weggelassen:** Kontrollfahrten-Workflow, Cloudflare-Preview-Modus, ungenutzte Crypto-Schicht sowie
-die gesamte SQLite-Multiprozess-Härtung (dank Einzelprozess + WAL nicht mehr nötig).
+**Weggelassen:** Cloudflare-Preview-Modus, ungenutzte Crypto-Schicht sowie die gesamte
+SQLite-Multiprozess-Härtung (dank Einzelprozess + WAL nicht mehr nötig).
+
+**Neu (K-Fahrt/Kontrollfahrten):** Bootsführer/Wachführer beantragen eine Kontrollfahrt
+(`kind=K_FAHRT` in `minus_one_requests`); der **Wachführer setzt** sie über
+`POST /api/requests/:id/set-k-fahrt` (bewusst getrennt vom Genehmigen). Eine gesetzte K-Fahrt
+reduziert den betroffenen Turm automatisch um **2 WG** (abgeleitet in `buildTowerViews`); Beenden
+über `…/return`. Siehe `docs/FEATURES.md`.
 
 ## Kernentscheidung: harte Admin-Grenze
 Ein Node-Prozess bedient zwei Fastify-Listener: Public (3002) und Admin (3003, Bind `127.0.0.1`).
@@ -24,7 +30,7 @@ während der Admin-Bereich intern bleibt (ausdrücklicher Wunsch).
 
 ## Verifikation (Stand Neubau)
 - `npm run typecheck` grün · `npm run build` (web + admin + api) grün.
-- `npm test` → **32/32 grün** (shared-Logik, Auth/Setup, Scope-Isolation + `-1/+1` + Boots-Soll, Admin-Grenze).
+- `npm test` → **35/35 grün** (shared-Logik, Auth/Setup, Scope-Isolation + `-1/+1` + K-Fahrt + Boots-Soll, Admin-Grenze).
 - Server-Boot-Smoke: beide Ports antworten, Login/Seed/WAL ok, `/api/admin` auf Public = 404.
 - Browser-Smoke (Chromium): Web- & Admin-SPA laden, Login, Tabs, Leaflet-Karte, Tabellen – 0 Konsolenfehler.
 
@@ -33,7 +39,6 @@ während der Admin-Bereich intern bleibt (ausdrücklicher Wunsch).
   existiert). Ohne Passwort greift der Erst-Setup-Flow (`POST /api/auth/init`).
 
 ## Bewusst offen / nächste Schritte
-- **Kontrollfahrten** könnten bei Bedarf als Workflow neu ergänzt werden (Bootsführer → Wachführer).
 - **Live-GPS** der Wachgänger aus dem Browser (Endpoint `PATCH /api/guards/:id/position` vorhanden).
 - **Versions-Sync:** Semantic-Release bumpt `package.json` (Root); die API meldet `APP_VERSION`
   (im Docker-Build als Build-Arg gesetzt). Bei Bedarf Workspace-Versionen mitziehen.

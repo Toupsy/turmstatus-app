@@ -21,11 +21,13 @@
   import BoatModal from './BoatModal.svelte';
   import GuardModal from './GuardModal.svelte';
   import MinusOneModal from './MinusOneModal.svelte';
+  import KFahrtModal from './KFahrtModal.svelte';
 
   let towerModal: TowerView | null | 'new' = null;
   let boatModal: BoatView | null | 'new' = null;
   let guardModal: GuardView | null | 'new' = null;
   let minusOneGuard: GuardView | null = null;
+  let kFahrtGuard: GuardView | null = null;
 
   const presentTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -35,7 +37,7 @@
     towers.update((list) =>
       list.map((x) => {
         if (x.id !== t.id) return x;
-        const currentStaff = x.guardStaff + next;
+        const currentStaff = Math.max(0, x.guardStaff + next - x.kFahrtReduction);
         const status =
           currentStaff >= x.effectiveRequiredStaff ? 'GREEN' : currentStaff >= x.effectiveRequiredStaff / 2 ? 'YELLOW' : 'RED';
         return { ...x, presentStaff: next, currentStaff, status };
@@ -109,6 +111,7 @@
   }
 
   $: canRequestMinusOne = $canManage || $isBootsfuehrer || $currentUser?.role === 'WACHGAENGER';
+  $: canRequestKFahrt = $canManage || $isBootsfuehrer;
 </script>
 
 <div class="panel">
@@ -153,6 +156,7 @@
             {#if t.hasBoat}
               {t.boatsAtTower}⚓ {#if t.boatWarning}<span class="boat-warn">⚠ Boot weg</span>{/if}
             {:else}<span class="muted">–</span>{/if}
+            {#if t.activeKFahrten > 0}<span class="boat-warn">⚠ K-Fahrt −{t.kFahrtReduction}</span>{/if}
           </td>
           {#if $canManage}
             <td class="row">
@@ -183,6 +187,9 @@
           <td class="row">
             {#if canRequestMinusOne && g.status === 'IN_AREA'}
               <button class="ghost small" on:click={() => (minusOneGuard = g)}>-1 beantragen</button>
+            {/if}
+            {#if canRequestKFahrt && g.status === 'IN_AREA'}
+              <button class="ghost small" on:click={() => (kFahrtGuard = g)}>K-Fahrt</button>
             {/if}
             {#if $canManage}
               <button class="ghost small" on:click={() => (guardModal = g)}>Bearbeiten</button>
@@ -247,4 +254,7 @@
 {/if}
 {#if minusOneGuard}
   <MinusOneModal guard={minusOneGuard} onClose={() => (minusOneGuard = null)} />
+{/if}
+{#if kFahrtGuard}
+  <KFahrtModal guard={kFahrtGuard} onClose={() => (kFahrtGuard = null)} />
 {/if}
