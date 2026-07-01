@@ -35,6 +35,8 @@
     startRealtime();
   }
   $: if (!$currentUser) initialized = false;
+  // Nach einem Demo-Rollenwechsel weg vom Personal-Tab, wenn die Rolle ihn nicht hat.
+  $: if (!$canManage && tab === 'team') tab = 'map';
 </script>
 
 {#if loading}

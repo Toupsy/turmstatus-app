@@ -6,6 +6,8 @@ npm-debug.log
 dist/
 apps/*/dist/
 packages/*/dist/
+dist-preview/
+.wrangler/
 *.tsbuildinfo
 .vite/
 
